@@ -1,0 +1,15 @@
+.deep-doc-margin {position: relative; background-color: #eff6f0; background-color: #e6e6ff; background-color: #e6eaf9; width: 30px; height: 0px}
+.deep-doc {position: relative; font-size: 24px; font-family: 'Lora', serif; color: #565699; color: #666699;}
+.deep-doc-par {background-color: white; margin-right: 20px; margin-left: 20px; padding: 3px; padding-top: 10px;}
+.deep-doc-sel-par {margin-right: 20px; margin-left: 20px; padding: 3px; padding-top: 10px; color: #f6e6ff; background-color: #666699;}
+.deep-doc-sel-word {background-color: #666699; color: #f6e6ff;}
+.deep-doc-sel-char {background-color: #666699; color: #f6e6ff;}
+.calloutBtn {margin: 0px; margin-left: 2px; display: inline-block;}
+.calloutBtnLft {margin: 0px; display: inline-block;}
+.sd-floating-terrace {position: absolute; background-color: white; border-width: 3px; border-style: solid; border-color: #667799; border-color: #f3b677; border-radius: 25px; padding: 15px; padding-left: 50px; top: 150px; left: 130px; width: 550px; height: 200px; box-shadow: 12px 8px 20px #9990aa; z-index: 50; }
+.drop-icon-box {position: relative; top: 8px; display: inline-block;}
+.anot {display: inline-block; position: relative; top: -8px; width: 15px; height: 15px; margin: 2px; margin-bottom: 0px; background-color: #997744; background-color: #666699; color: white; font-size: 10px; text-align: center; padding-top: 2px;}
+.anot:hover {background-color: #dd00aa;}
+.sideIcon {position: relative; width: 30px; border-style: dashed; border-color: #e6eaf9; border-width: 0px; border-color: purple; padding-left: 1px;}
+.tether {position: absolute; width: 24px; height: 36px; background-image: url("../images/zigzag.png"); z-index: 50;}
+.tether-bkgd {position: absolute; width: 24px; height: 36px; background-image: url("../images/zigzag-bkgd.png"); z-index: 45;}

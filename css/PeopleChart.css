@@ -1,0 +1,6 @@
+.flowline{position: absolute; width: 20px; height: 20px;}
+.flowlineTest{position: absolute; width: 20px; height: 20px; border-width: 1px; border-color: black; border-style: solid;}
+.personInfo{position: absolute; padding: 10px; padding-top: 3px; padding-bottom: 3px; background-color: #f6eeff;background-color: white; border-radius: 4px; border-color: #d6cfef; border-color: #f0e0f6; border-color: #f9f0ff; border-width: 2px; border-style: solid; font-family: Arial; font-size: 14px; color: #300036; box-shadow: 2px 2px none; display: inline-block;}
+#rgn1{position: absolute; background-color: none}
+#rgn2{position: absolute; background-color: none}
+#expandingBkgd{position: relative; width: 100%; background-color: #f6f6ff; background-color: #66607f; background-color: #f5f3ff; }

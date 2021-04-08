@@ -2,6 +2,8 @@
 
 There are quite a few applet views already in this repo as you may have noticed if you checked under the 'js' directory here. Each of these can help you write your own applets and are posted here for that purpose. Additionally, I'll try to create more video walk-throughs and add links to these video demonstrations here, as this will give you a good idea about the high level effect of what the code does.
 
+Where sample applets differ from the built-ins is that in order to use them in a vault, the 'addOns.js' must be updated with information about the sample applet. The add-ons file is somewhat self-explanatory, they allow the platform to find JavaScript methods that your applet provides, as well as configuration and even some contact information for the developer.
+
 ## Branch view
 [Branch view video demo](https://www.youtube.com/watch?v=r6FKeMApMJc)
 

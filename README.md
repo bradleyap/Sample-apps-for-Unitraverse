@@ -10,7 +10,7 @@ The following screen shot shows the typical key and value pairs that are general
 
 ![Picture of addons file](http://www.unitraverse.info/Bradley_Pliam/graphics/addons-stanza-scrn-shot.png)
 
-[More information on providing your own add-ons](http://unitraverse.com/products/ud-app/v1.4/sec-13-docs.html#addons_dev) can be found on the Unitraverse.com website:
+[More information on providing your own add-ons](http://unitraverse.com/products/ud-app/v1.4/sec-13-docs.html#addons_dev) can be found on the Unitraverse.com website.
 
 ## Branch view
 [Branch view video demo](https://www.youtube.com/watch?v=r6FKeMApMJc)

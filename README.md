@@ -4,6 +4,10 @@ There are quite a few applet views already in this repo as you may have noticed 
 
 Where sample applets differ from the built-ins is that in order to use them in a vault, the 'addOns.js' must be updated with information about the sample applet. The add-ons file is somewhat self-explanatory, they allow the platform to find JavaScript methods that your applet provides, as well as configuration and even some contact information for the developer.
 
+The following screen shot shows the typical key and value pairs that are generally used...
+
+![Picture of addons file](http://www.unitraverse.info/Bradley_Pliam/graphics/addons-stanza-scrn-shot.png)
+
 ## Branch view
 [Branch view video demo](https://www.youtube.com/watch?v=r6FKeMApMJc)
 

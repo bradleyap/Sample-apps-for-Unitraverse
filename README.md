@@ -6,7 +6,7 @@ There are quite a few applet views already in this repo as you may have noticed 
 
 Where sample applets differ from the built-ins is that in order to use them in a vault, the 'addOns.js' must be updated with information about the sample applet. Some of the keys in the add-ons file are self-explanatory but others are probably not. The stanza information is what allows the platform to find JavaScript methods that your applet provides, as well as configuration and even some contact information for the developer.
 
-The following code shows the typical key and value pairs that are generally used...
+The following code shows the typical keys and some value pairs that might be used...
 
 ```
     {

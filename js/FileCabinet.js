@@ -15,65 +15,73 @@
 */
 
 FileCabinet = {};
-FileCabinet.currentItem = null;
-FileCabinet.currentConfig = "";
-FileCabinet.appletRootItemsMap = {};
-FileCabinet.appletHostItemsMap = {};
-
+FileCabinet.rootInfoMap = {};
 
 function initializeForFileCabinetApplet(core,callback,args){
-  var fc = FileCabinet;
-  var scopeItem = core['scopeItem'];
-  if(typeof scopeItem.appInstanceId === 'undefined'){
-    scopeItem.appInstanceId = SharedGlobal.core['getApplicationInstanceId'](scopeItem);
+  var core = SharedGlobal.core;
+  var sidx = core.scopeItemIndex;
+  var boundLocation = core.getItemConfiguration(sidx,'bound_location');
+  var config = core.getItemConfiguration(sidx,'app_config');
+
+  /*
+    if there is not a file system location or the correct config setting, then return
+  */
+  if(boundLocation === "" || config !== 'app-defined'){
+    return;
   }
-  fc.appInstanceId = scopeItem.appInstanceId;
-  if(typeof scopeItem.boundLocation === 'undefined'){
-    scopeItem.boundLocation = "";
-  }
-  fc.currentItem = scopeItem;
-  fc.currentConfig = "";
-  if(typeof scopeItem.stem === 'undefined'){
-    if(scopeItem.boundLocation !== ""){
-      fc.currentItem.boundLocation = scopeItem.boundLocation; 
-      var rootOb = fc.appletRootItemsMap[scopeItem.appInstanceId];
-      if(typeof rootOb === 'undefined' || rootOb === null){
-        rootOb = fc.appletRootItemsMap[scopeItem.appInstanceId] = SharedGlobal.core['createNewVaultItem']();
-        rootOb.appInstanceId = scopeItem.appInstanceId;
-        if(typeof scopeItem.apcd !== 'undefined'){
-          rootOb.apcd = scopeItem.apcd;
-        }
-        rootOb.defaultView = scopeItem.defaultView;
-        rootOb.subj = scopeItem.subj;
-        rootOb.hdTtl = scopeItem.hdTtl;
-        rootOb.stem = "";
-        rootOb.boundLocation = scopeItem.boundLocation;
-        rootOb.config = scopeItem.config;
-        rootOb.contentLoaded = false;
-        fc.appletHostItemsMap[scopeItem.appInstanceId] = scopeItem;
+  var itemData = core.getItemData(sidx,true); //true causes a data object to be created
+
+  /*
+    All non-root items will have the 'spawned' flag, we refer to it to see if the root item is the scope item
+  */
+  if(typeof itemData.spawned === 'undefined'){
+
+    /*
+      There are 3 situations to handle root item:
+        1) we are all set up and simply revisiting the root node
+        2) we're starting cold with a stub still in place
+        3) we're starting cold with no stub in place
+    */
+    var cid = -1;
+    var cinfo = core.getItemChildInfo(sidx,0);
+    if(!cinfo.exists){
+      /*
+        No stub found, so create one. The current method for creating a temporary vault item, whose content is not written to permanent storage along with the rest of the vault at 'save' command, requires that a stub node exists at some target location. When the save command is issued, only the stub will persist as a permanent part of the vault graph. We check for the existence of that stub, and create one if it is not present. 
+      */
+      cid = core.createAndInsertVaultItem(sidx,0);
+      core.setItemDataAttribute(cid,'tag','fc_stub');
+    }
+    else{
+      /*
+        is this a stub or a deployed temporary node? If deployed we do nothing more
+      */
+      var cItemData = core.getItemData(cinfo.id,true);
+      if(typeof cItemData.tag === 'undefined' || cItemData.tag !== 'fc_stub'){ 
+        //we are already setup
+        return;
       }
-      fc.currentItem = rootOb;
-      fc.currentConfig = rootOb.config;
-      var pcInfo = SharedGlobal.core['getParentAndChildIndex'](core['scopeItemIndex']);
-      SharedGlobal.core['installGuest'](pcInfo.parent,pcInfo.childIndex,scopeItem,rootOb);
-    }
-    //if(typeof rootOb.boundLocation !== 'undefined')fc.currentItem.boundLocation = scopeItem.boundLocation = rootOb.boundLocation;
+    } 
+    /*
+      keep the root item from being saved, and any children
+    */
+    core.convertToTemporaryVaultItem(sidx,0,"");
+  
+    /*
+      store these in the item data for a spawning process that happens as users navigate deeper into the FS directory     
+    */
+    itemData.stem = "";
+    itemData.unansweredLoadAttempts = 0;
+    itemData.riKey = 22;
+    FileCabinet.rootInfoMap[itemData.riKey] = {rootLocation:boundLocation,config:'app-defined'};
   }
-  else {
-    var host = fc.appletHostItemsMap[fc.appInstanceId];
-    var rootOb = fc.appletRootItemsMap[fc.appInstanceId];
-    if(host.config !== rootOb.config)host.config = rootOb.config; 
-    if(host.boundLocation !== rootOb.boundLocation){
-      host.boundLocation = rootOb.boundLocation;
-    }
-    fc.currentConfig = rootOb.config;
-  }
-  if(fc.currentItem.boundLocation !== "" && fc.currentConfig === 'app-defined' &&  fc.currentItem.contentLoaded == false){
-    var path = fc.currentItem.boundLocation;
+
+  if(itemData.unansweredLoadAttempts < 5){
+    var path = boundLocation;
     var lastChar = path.substring(path.length - 1);
     if(lastChar === "/" || lastChar === "\\")path = path.substring(path.length - 1);
-    if(fc.currentItem.stem.length > 0 || (core['device'] === 'win' && (path === 'c:' || path === 'C:')))path += "/" + fc.currentItem.stem; 
-    core['requestDirectoryContents'](path,FileCabinet.dataReceiverMethod,""); 
+    if(itemData.stem.length > 0 || (core.device === 'win' && (path === 'c:' || path === 'C:')))path += "/" + itemData.stem; 
+    itemData.unansweredLoadAttempts++;
+    core.requestDirectoryContents(path,FileCabinet.dataReceiverMethod,""); 
   }
 }
 
@@ -81,26 +89,23 @@ function initializeForFileCabinetApplet(core,callback,args){
 ///////////////// HTML generation functions ///////////////////
 
 function generateFileCabinetHTML(core,responseCallback){
-  var scopeItem = core['scopeItem'];
-  var scopeIndex = core['scopeItemIndex'];
-  var curItem = FileCabinet.currentItem;
-  if(curItem.boundLocation === "" || FileCabinet.currentConfig !== "app-defined"){
+  var iter = core.tracker;  //use opaque iterator to detect cyclical iteration patterns
+  var sidx = iter.tempScopeItemIndex;
+  var boundLocation = core.getItemBoundLocation(sidx);
+  var config = core.getItemConfiguration(sidx);
+  if(boundLocation === "" || config !== 'app-defined'){
     return FileCabinet.getSetupHowToMsg();
   }
   var imagesDir = SharedGlobal.core.getImageDirectoryPath();
-  var item = curItem; //core['scopeItem'];
-  var pathIds = core['pathIds'];
-  var mainRect = core['mainRect'];
-  var openItems = core['openItems'];
-  var groupMode = core['groupMode'];
-  var groupMap = core['groupMap'];
   var html = "";
   var titleBarAdj = 0;
   var resItem = null;
-  var iter = core['tracker'];  //use opaque iterator to detect cyclical iteration patterns
-  var len = iter.childItemCount();
   var curIdString = "";  
-
+  var itemData = SharedGlobal.core.getItemData(sidx);
+  if(typeof itemData.spawned === 'undefined'){
+    iter = iter.down(0); 
+  }
+  var len = iter.childItemCount();
   if(len == 0)html += "<div class=\"spacer-item\"></div><div class=\"spacer-item\"></div><div class=\"spacer-item\"></div>";
   for(var i=0; i < len; i++){
     curIdString = iter.getIdString();
@@ -109,19 +114,13 @@ function generateFileCabinetHTML(core,responseCallback){
       html += " <img src=\"" + imagesDir + "/more.png\"/>"; 
     }
     html += "</div><br/>"; 
-    //SharedGlobal.tabIdsBuffer[SharedGlobal.tabIdsPos] = curIdString; 
     SharedGlobal.tic.push(curIdString);
     iter.next(); 
   }
  
-  html += FileCabinet.getResourceItemsHTML(item);
+  html += FileCabinet.getResourceItemsHTML(iter.tempScopeItemIndex);
 
-  var retData = {};
-  var appletValues = {};
-  appletValues['explicitChildCount'] = SharedGlobal.tic.getNonResIdCount();
-  appletValues['explicitResourceCount'] = SharedGlobal.tic.getResIdCount();
-  retData['appletValuesMap'] = appletValues;
-  responseCallback(retData);
+  responseCallback({appletValuesMap:{explicitChildCount:SharedGlobal.tic.getNonResIdCount(),explicitResourceCount:SharedGlobal.tic.getResIdCount()}});
   return html;
 }
 
@@ -138,83 +137,85 @@ FileCabinet.getSetupHowToMsg = function(){
   return msg;
 }
 
-FileCabinet.getResourceItemsHTML = function(item){
-  var core = SharedGlobal['core'];
-  var openItems = core['openItems'];
-  var groupMode = core['groupMode'];
-  var groupMap = core['groupMap'];
-  var imagesDir = SharedGlobal.core.getImageDirectoryPath();
+FileCabinet.getResourceItemsHTML = function(sidx){
+  var core = SharedGlobal.core;
+  var openItems = core.openItems;
+  var groupMode = core.groupMode;
+  var groupMap = core.groupMap;
+  var imagesDir = core.getImageDirectoryPath();
   var html = "";
-  len = 0;
-  if(item['rcs'] !== undefined && item['rcs'] !== null)len = item['rcs'].length;
-  for(var i=0; i < len; i++){
-    html += "<div class=\"cab-resource-item\" id=\"r_item_" + i + "\"><img class=\"resource-icon\" src=\"" + item['rcs'][i]['icon'] + "\" width=\"16\" height=\"16\" />" + item['rcs'][i]['ttl'];
-    if(openItems[item.rcs[i]['id']])html += " <img class=\"resource-icon-tight\" src=\"" + imagesDir + "/grn-circle.png\"/>";
-    if(item.rcs[i].type === 'url'){
-      if(item.rcs[i].pinned === true)html += " <img class=\"resource-icon-tight\" src=\"" + imagesDir + "/push-pin-stuck.png\" width=\"20\" height=\"16\"/>"; 
+  var resList = core.getItemResourceList(sidx); 
+  for(var i=0; i < resList.length; i++){
+    var res = resList[i];
+    html += "<div class=\"cab-resource-item\" id=\"r_item_" + i + "\"><img class=\"resource-icon\" src=\"" + res.icon + "\" width=\"16\" height=\"16\" />" + res.ttl;
+    if(openItems[res.id])html += " <img class=\"resource-icon-tight\" src=\"" + imagesDir + "/grn-circle.png\"/>";
+    if(res.type === 'url'){
+      if(res.pinned === true)html += " <img class=\"resource-icon-tight\" src=\"" + imagesDir + "/push-pin-stuck.png\" width=\"20\" height=\"16\"/>"; 
       else html += " <img class=\"resource-icon-tight\" src=\"" + imagesDir + "/push-pin-unstuck.png\" width=\"20\" height=\"16\"/>"; 
     }
     if(groupMode){
       var grps = "";
-      if(groupMap[item.rcs[i].id])grps = groupMap[item.rcs[i].id];
+      if(groupMap[res.id])grps = groupMap[res.id];
       html += "<img class=\"resource-icon-tight\" src=\"" + imagesDir + "/ismember.png\" /><span class=\"quiet\">{ " + grps + " }</span>";
     }
     html += "</div>";
-    SharedGlobal.tic.push('r_item_' + i,'resources');
+    SharedGlobal.tic.push('r_item_' + i,'resource');
   }
   return html;
 }
 
-FileCabinet.dataReceiverMethod = function(data,requestId){
-  if(FileCabinet.currentItem !== null){
-    var scopeItem = FileCabinet.currentItem;
-    var dirList = data.directories;
-    var dirOb = null;
-    var nixed = 0;
-    for(var i=0; i<dirList.length; i++){
-      if(SharedGlobal.core['device'] === 'win'){
-      //hiding Microsoft's "My *" folders, Python's os.listdir() gives these in error
-        if(dirList[i] === "My Music"){nixed++; continue;}
-        if(dirList[i] === "My Documents"){nixed++; continue;}
-        if(dirList[i] === "My Videos"){nixed++; continue;}
-        if(dirList[i] === "My Pictures"){nixed++; continue;}
-      }	  
-      dirOb = SharedGlobal.core['createNewVaultItem']();
-      dirOb.appInstanceId = scopeItem.appInstanceId;
-      if(typeof scopeItem.apcd !== 'undefined'){
-        dirOb.apcd = scopeItem.apcd;
-      }
-      dirOb.hdTtl = false;
-      dirOb.subj = dirList[i];
-      dirOb.stem = dirOb.subj;
-      if(scopeItem.stem !== ""){
-        dirOb.stem = scopeItem.stem + "/" + dirOb.stem;
-      }
-      dirOb.boundLocation = scopeItem.boundLocation;
-      dirOb.contentLoaded = false;
-      scopeItem.cdrn[i - nixed] = dirOb;
-      scopeItem.labs[i - nixed] = dirList[i];
+FileCabinet.dataReceiverMethod = function(data,requestTag){
+  var core = SharedGlobal.core;
+  var sidx = core.scopeItemIndex;
+  var dirList = data.directories;
+  var dirOb = null;
+  var nixed = 0;
+  var itemData = core.getItemData(sidx);
+  var ri = FileCabinet.rootInfoMap[itemData.riKey];
+  if(typeof itemData.spawned === 'undefined'){
+    var cinfo = core.getItemChildInfo(sidx,0);
+    sidx = cinfo.id;
+  }
+  for(var i=0; i<dirList.length; i++){
+    if(core.device === 'win'){
+    //hiding Microsoft's "My *" folders, Python's os.listdir() gives these in error
+      if(dirList[i] === "My Music"){nixed++; continue;}
+      if(dirList[i] === "My Documents"){nixed++; continue;}
+      if(dirList[i] === "My Videos"){nixed++; continue;}
+      if(dirList[i] === "My Pictures"){nixed++; continue;}
     }
-    var fileList = data.files;
-    var fileOb = null;
-    var type = "file";
-    var fnArr = [];
-    var fn = "";
-    var ext = "";
-    if(fileList.length > 0)scopeItem.rcs = [];
-    for(var i=0; i<fileList.length; i++){
-      type = "file";
-      fnArr = fileList[i].split('.');
-      fn = fnArr[0];
-      ext = fnArr[fnArr.length - 1];
-      if(ext === 'txt')type = "doc";
-      fileOb = SharedGlobal.core['createTemporaryResourceVaultItem'](type,fileList[i],fn,ext);
-      fileOb.path = scopeItem.boundLocation;
-      if(scopeItem.stem.length > 0)fileOb.path += "/" + scopeItem.stem;
-      scopeItem.rcs[i] = fileOb; 
+    var nuId = core.createAndInsertVaultItem(sidx,-1,""); 
+    var appCode = core.getItemAppCode(core.scopeItemIndex);
+    if(appCode !== ""){
+      core.setItemAppCode(nuId,appCode);
     }
-    FileCabinet.currentItem.contentLoaded = true;
-  } 
-  SharedGlobal.core['requestRedraw'](false);
+    core.setItemBoundLocation(nuId,ri.rootLocation);
+    core.setItemConfiguration(nuId,ri.config);
+    var d = core.getItemData(nuId,true);
+    d.unansweredLoadAttempts = 0; //this answers the load attempt
+    d.spawned = true;
+    core.setItemSubject(nuId,d.stem = dirList[i]);
+    if(itemData.stem !== ""){
+      d.stem = itemData.stem + "/" + d.stem;
+    }
+    d.riKey = itemData.riKey;
+  }
+  var fileList = data.files;
+  var fileOb = null;
+  var type = "file";
+  var fnArr = [];
+  var fn = "";
+  var ext = "";
+  for(var i=0; i<fileList.length; i++){
+    type = "file";
+    fnArr = fileList[i].split('.');
+    fn = fnArr[0];
+    ext = fnArr[fnArr.length - 1];
+    if(ext === 'txt')type = "doc";
+    fileOb = core.createTemporaryResourceVaultItem(type,fileList[i],fn,ext);
+    fileOb.path = core.getItemBoundLocation(sidx);
+    core.insertResourceItem(sidx,i,fileOb);
+    if(itemData.stem.length > 0)fileOb.path += "/" + itemData.stem;
+  }
+  core.requestRedraw(false);
 }
-

@@ -37,7 +37,7 @@ function initializeForFileCabinetApplet(core,callback,args){
   if(typeof itemData.spawned === 'undefined'){
 
     /*
-      There are 3 situations to handle root item:
+      There are 3 situations to handle with root item:
         1) we are all set up and simply revisiting the root node
         2) we're starting cold with a stub still in place
         3) we're starting cold with no stub in place

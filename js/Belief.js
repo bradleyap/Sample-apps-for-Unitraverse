@@ -20,16 +20,18 @@ BeliefModeller.tempStore = {};
 BeliefModeller.displayModes = {};
 BeliefModeller.currentOp = "";
 
-BeliefModeller.getAppState = function(scopeItem){
+BeliefModeller.getAppState = function(scopeId){
   var wnd = SharedGlobal.core.getWindowPaneFromIndex(SharedGlobal.core.getHostPaneIndex());
-  var awid = SharedGlobal.core.scopeItem.appInstanceId + '_' + wnd.paneId;
+  var sidx = scopeId;
+  if(SharedGlobal.core.itemExists(scopeId) == false){
+    sidx = SharedGlobal.core.scopeItemIndex;
+  }
+  var appInstanceId = SharedGlobal.core.getItemAppInstanceId(sidx);
+  var awid = appInstanceId + '_' + wnd.paneId;
   if(typeof BeliefModeller.tempStore[awid] === 'undefined'){
-    if(typeof scopeItem === 'undefined'){
-      scopeItem = SharedGlobal.core.scopeItem;
-    }
     ts = BeliefModeller.tempStore[awid] = {};
-    ts.rootOb = scopeItem;
-    ts.travelStack = [{item:scopeItem,title:scopeItem.s,childIndex:-1}];
+    ts.rootObId = sidx;
+    ts.travelStack = [{itemId:sidx,title:SharedGlobal.core.getItemSubject(sidx),childIndex:-1}];
     ts.selectVal = -1;
     ts.prx = ""; //path route extension
     ts.displayMode = 'tree_explorer';
@@ -45,13 +47,12 @@ BeliefModeller.getAppletWindowId = function(appInstanceId,windowId){
 
 function initializeBeliefSystemModeller(core,callback,hostPaneIdx,args){
   var m = BeliefModeller;
-  var scopeItem = core.scopeItem;
-  if(typeof scopeItem.s === 'undefined'){
-    scopeItem.s = "Unnamed Belief System";
+  var sidx = core.scopeItemIndex;
+  if(typeof core.getItemSubject(sidx) === 'undefined'){
+    core.setItemSubject(sidx,"Unnamed Belief System");
   }
-  if(typeof scopeItem.appInstanceId === 'undefined'){
-    scopeItem.appInstanceId = SharedGlobal.core.getApplicationInstanceId(scopeItem);
-    scopeItem.hdTtl = false;
+  if(core.getItemAppInstanceId(sidx) < 0){
+    core.setItemAppInstanceId(SharedGlobal.core.getApplicationInstanceId(sidx));
   }
   core.setupResponsiveMenuitem(hostPaneIdx,'author','add_position','anyregion',null,'','',m.addBeliefPosition);
   core.setupResponsiveMenuitem(hostPaneIdx,'author','add_reference','anyregion',null,'','',m.addBeliefPosition); //handler just temporary
@@ -61,14 +62,15 @@ function initializeBeliefSystemModeller(core,callback,hostPaneIdx,args){
   var icnStr = imagesDir + "/bs-icon.png";
   var wndIdx = core.getDrawingPaneIndex();
   var wnd = core.getWindowPaneFromIndex(wndIdx);
-  var as = BeliefModeller.getAppState(scopeItem);
+  //var as = BeliefModeller.getAppState(scopeItem);
+  var as = BeliefModeller.getAppState(sidx);
   var locInfo = as.travelStack[as.travelStack.length - 1];
   var titleBarText = "Belief Tenet Page";
   if(as.travelStack.length < 2){
     titleBarText = "Belief System Page";
   }
   core.setTitleBarTitle(wnd,titleBarText); 
-  if(locInfo.item != scopeItem){
+  if(locInfo.itemId != sidx){
     icnStr = imagesDir + "/tenet-icon.png";
   }
   core.setMaxWindowSize(wnd,600,-1);
@@ -81,7 +83,7 @@ function generateBeliefSystemHTML(core,responseCallback){
   var m = BeliefModeller;
   var html = "";
   var pageHTML = "";
-  var scopeItem = core.scopeItem;
+  var sidx = core.scopeItemIndex;
   var token = core.getDrawingInstanceToken();
   var as = BeliefModeller.getAppState();
   var iter = core.tracker;
@@ -91,7 +93,7 @@ function generateBeliefSystemHTML(core,responseCallback){
     if(as.travelStack.length < 2){
       var idString = 'belief_txt' + as.awid;
       SharedGlobal.tic.push(idString);
-      pageHTML = generateEnclosingRoundedPaneHTML("system description",m.paneIds[0],"<div class=\"basic-child-item\" id=\"" + idString + "\">" + scopeItem.s + "</div>");
+      pageHTML = generateEnclosingRoundedPaneHTML("system description",m.paneIds[0],"<div class=\"basic-child-item\" id=\"" + idString + "\">" + core.getItemSubject(sidx) + "</div>");
       html = m.generateBeliefTenetSummaryHTML(iter,0,iter.childItemCount());
       pageHTML += generateEnclosingRoundedPaneHTML("key positions",m.paneIds[1],html);
     }
@@ -116,22 +118,21 @@ BeliefModeller.generateBeliefTenetSummaryHTML = function(iter,startPos,endPos){
   var html = "";
   var curIdString = ""; 
   if(startPos == endPos)return html; 
-  html = "<div class=\"white-mgn\">";
+  html = '<div class="white-mgn">';
   var imagesDir = SharedGlobal.core.getImageDirectoryPath();
-  if(endPos == startPos)html += "<div class=\"spacer-item\"></div><div class=\"spacer-item\"></div><div class=\"spacer-item\"></div>";
+  if(endPos == startPos)html += '<div class="spacer-item"></div><div class="spacer-item"></div><div class="spacer-item"></div>';
   for(var i=startPos; i < endPos; i++){
     curIdString = iter.getIdString();
-    if(iter.child(i) !== null){
-      var item = iter.child(i);
-      if(item){ 
-        html += "<div class=\"basic-child-item\" id=\"" + curIdString + "\">" + item.s;
-      }
+    var cinfo = iter.childInfo();
+    if(cinfo.exists && !cinfo.isNull && cinfo.typeof === 'object'){
+      var subject = iter.label(i); //SharedGlobal.core.get(cinfo.id);
+      html += '<div class="basic-child-item" id="' + curIdString + '">' + subject + '</div>';
     }
-    html += "</div><br/>"; 
+    html += '<br/>'; 
     SharedGlobal.tic.push(curIdString);
     iter.next(); 
   } 
-  html += "</div>";
+  html += '</div>';
   return html;
 }
 
@@ -161,16 +162,16 @@ BeliefModeller.canEditItem = function(){
 
 BeliefModeller.handleEditOfSelected = function(e){
   var core = SharedGlobal.core;
-  var scopeItem = core.scopeItem;
+  var sidx = core.scopeItemIndex;
   var paneIdx = core.getActivePaneIndex();
   var wnd = core.getWindowPaneFromIndex(paneIdx);
   var selId = wnd.tabIdsArr[wnd.tabIdsPos];
   if(selId.indexOf('belief_txt') == 0){
-    core['setSimpleEditMessage']('Belief system name:');
-    core['setOnAcceptSimpleEditFunc'](BeliefModeller.onAcceptBeliefModellerSimpleEdit);
+    core.setSimpleEditMessage('Belief system name:');
+    core.setOnAcceptSimpleEditFunc(BeliefModeller.onAcceptBeliefModellerSimpleEdit);
     core.displayCorePopup('simple-edit-pane');
     var elmt = document.getElementById('se-dialog-single-item');
-    elmt.value = scopeItem.s;
+    elmt.value = core.getItemSubject(sidx);
   }
   if(selId.indexOf('doctrine_txt') == 0){
     var prx = BeliefModeller.getCurrentPathRoute().join('.');
@@ -186,8 +187,8 @@ BeliefModeller.handleEditOfSelected = function(e){
 }
 
 BeliefModeller.onAcceptBeliefModellerSimpleEdit = function(value){
-  var scopeItem = SharedGlobal.core.scopeItem;
-  scopeItem.s = value;
+  var sidx = SharedGlobal.core.scopeItemIndex;
+  SharedGlobal.core.setItemSubject(sidx,value);
   SharedGlobal.core.requestRedraw(true);
 }
 
@@ -200,18 +201,14 @@ BeliefModeller.addBeliefPosition = function(e){
 }
 
 BeliefModeller.onAcceptBeliefPositionInfo = function(resultMap){
-  var item = SharedGlobal.core.createNewVaultItem();
-  item.apcd = 'BeliefModeller1';
-  item.hdTtl = false;
-  var pathRoute = BeliefModeller.getCurrentPathRoute();
-  item.s = resultMap['ps'].value;
   var core = SharedGlobal.core;
+  var pathRoute = BeliefModeller.getCurrentPathRoute();
   var prx = pathRoute.join('.');
   var paneIdx = core.getActivePaneIndex();
   var iter = core.getRelativePositionTracker(prx,0,paneIdx);
-  core.addVaultItem(iter.tempScopeItemIndex,"",item,-1);
-  core.requestRedraw(true); //if vault structure
-                                    //or tab ids have changed, pass in true 
+  var nuId = SharedGlobal.core.createAndInsertVaultItem(iter.tempScopeItemIndex,-1,"",resultMap['ps'].value);
+  core.setItemAppCode(nuId,'BeliefModeller1');
+  core.requestRedraw(true); //since vault structure has changed, pass in true
 }
 
 BeliefModeller.generateBeliefPositionPageHTML = function(core,position,parentLabel,token){
@@ -226,21 +223,21 @@ BeliefModeller.generateBeliefPositionPageHTML = function(core,position,parentLab
   SharedGlobal.tic.push(idString);
   html = generateEnclosingRoundedPaneHTML("position",m.paneIds[0],"<div class=\"basic-child-item\" id=\"" + idString + "\">" + position + "</div>");
 
-  var innerHTML = "";
+  var posHTML = "";
   var paneIdx = core.getActivePaneIndex();
   //PRX - path route extension has a dot-delimited format
   var iter = core.getRelativePositionTracker(m.getCurrentPathRoute().join('.'),0,paneIdx);
   var count = iter.childItemCount();
   if(count > 0){
-    innerHTML += m.generateBeliefTenetSummaryHTML(iter,0,count);
+    posHTML += m.generateBeliefTenetSummaryHTML(iter,0,count);
   }
   else{
     idString = 'add_tenet_' + as.awid;
     SharedGlobal.tic.push(idString);
-    innerHTML += "<div class=\"basic-child-item\" id=\"" + idString + "\">[unsupported]</div>";
+    posHTML += "<div class=\"basic-child-item\" id=\"" + idString + "\">[unsupported]</div>";
   }
 
-  html += generateEnclosingRoundedPaneHTML("supporting positions",m.paneIds[1],innerHTML);
+  html += generateEnclosingRoundedPaneHTML("supporting positions",m.paneIds[1],posHTML);
   idString = 'parent_lnk_' + as.awid;
   SharedGlobal.tic.push(idString);
   var parentHTML = "<div class=\"basic-child-item\" id=\"" + idString + "\">" + parentLabel + "</div>";
@@ -308,8 +305,11 @@ BeliefModeller.doEnterActionOnSelectedItem = function(e){
           var paneIdx = core.getActivePaneIndex();
           var ci = Number(arr[2]);
           var iter = core.getRelativePositionTracker(BeliefModeller.getCurrentPathRoute().join('.'),ci,paneIdx);
-          var item = iter.getScopeItem();
-          var title = item.c[ci].s;
+          var cinfo = iter.childInfo(ci);
+          var title = "";
+          if(cinfo.exists && !cinfo.isNull && cinfo.typeof === 'object'){
+            title = core.getItemSubject(cinfo.id);
+          }
           as.travelStack[as.travelStack.length] = {title:title,childIndex:ci};
         }
       }
@@ -330,7 +330,7 @@ BeliefModeller.doEnterActionOnSelectedItem = function(e){
 
 function acceptBeliefSystemTitle(value){
   if(BeliefModeller.currentOp === 'edit_bs_title'){
-    SharedGlobal.core.scopeItem.s = value; 
+    SharedGlobal.core.setItemSubject(SharedGlobal.core.scopeItemIndex,value); 
   } 
   SharedGlobal.core.requestRedraw(false); 
 }
@@ -343,8 +343,8 @@ function handleBeliefModellerDoubleClick(e){
 function handleBeliefSystemEdit(e){
   var handled = false;
   var core = SharedGlobal.core;
-  var iter = null;
-  var item = null;
+  var iter = core.getTracker();
+  var sidx = iter.scopeIndex;
   var wnd = core.getWindowPaneFromIndex(core.getActivePaneIndex());
   var onAcceptFunc = function(){};
   var tabId = wnd.tabIdsArr[core.getTabIdsPos()];
@@ -352,13 +352,12 @@ function handleBeliefSystemEdit(e){
     BeliefModeller.currentOp = 'edit_bs_title';
     var paneIdx = core.getActivePaneIndex();
     iter = core.getRelativePositionTracker(BeliefModeller.getCurrentPathRoute().join('.'),0,paneIdx);
-    item = iter.getScopeItem();
-    SharedGlobal.core['setSimpleEditMessage']("Belief system title:");
-    SharedGlobal.core['setOnAcceptSimpleEditFunc'](BeliefModeller.onAcceptBeliefSystemEdit);
+    SharedGlobal.core.setSimpleEditMessage("Belief system title:");
+    SharedGlobal.core.setOnAcceptSimpleEditFunc(BeliefModeller.onAcceptBeliefSystemEdit);
     SharedGlobal.displayCorePopup('simple-edit-pane');
     var elmt = document.getElementById('se-dialog-single-item');
-    elmt.value = item.s;
-    BeliefModeller.editTarget = item;
+    elmt.value = core.getItemSubject(sidx);
+    BeliefModeller.editTargetId = sidx;
     core.blockEventPropagation(e); 
     handled = true;
   }
@@ -368,7 +367,7 @@ function handleBeliefSystemEdit(e){
     BeliefModeller.editTargetPos = as.childIndex; 
     editMsg = "Belief tenet:";
     onAcceptFunc = BeliefModeller.onAcceptBeliefPositionEdit;
-    BeliefModeller.editTarget = item;
+    BeliefModeller.editTargetId = sidx;
     handled = true;
   }
   return handled;
@@ -380,19 +379,18 @@ BeliefModeller.onAcceptBeliefSystemEdit = function(){
   var elmt = document.getElementById('se-dialog-single-item');
   if(m.currentOp === 'edit_doctrine_label'){
     dataModified = true;
-    alert('changing label: ' + m.editTarget.labs[m.editTargetPos] + ' to ' + elmt.value);
   }
   if(m.currentOp === 'edit_bs_title'){
-    m.editTarget.s = elmt.value;
+    SharedGlobal.core.setItemSubject(m.editTargetId,elmt.value);
     dataModified = true;
   }
   SharedGlobal.core['dismissCurrentDialogBox']();
-  if(dataModified)SharedGlobal.core['requestRedraw'](true);
+  if(dataModified)SharedGlobal.core.requestRedraw(true);
 }
 
 BeliefModeller.onAcceptBeliefPositionEdit = function(){
   var dataModified = false;
-  if(dataModified)SharedGlobal.core['requestRedraw'](true);
+  if(dataModified)SharedGlobal.core.requestRedraw(true);
 }
 
 BeliefModeller.getCurrentPathRoute = function(){

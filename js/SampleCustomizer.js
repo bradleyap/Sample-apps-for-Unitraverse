@@ -31,9 +31,9 @@ function initializeForSampleCustomizerEBHTML(core,responseCallback){
 
 function generateSampleCustomizerEBHTML(core,responseCallback){
   var iter = core.tracker;
-  iter.setRecursionDepthLimit(150);
+  iter.setRecursionDepthLimit(1200);
   SampleCustomizer.targetAncestorsMap = {};
-  var html = convertToHTML(iter,0,{});
+  var html = convertToExpandedBranchHTML(iter,0,{});
   var retData = {};
   var appletValues = {};
   appletValues['isMultiLevel'] = true;
@@ -52,39 +52,41 @@ SampleCustomizer.addEBChild = function(){
   handled = true;
 }
 
-function convertToHTML(iter,indents,parentMap){
+function convertToExpandedBranchHTML(iter,indents,parentMap){
   if(iter === null)return "";
-  var item = iter.getScopeItem();
+  var sidx = iter.getScopeIndex();
   var label = "";
   var itemTitle = "";
   var sep = "";
   var childId = null;
   var tabSpc = "";
   var itemString = "";
-  var s = "";
+  var html = "";
   var len = iter.childCount();
-  if(typeof item === 'undefined' || item === null)return s;
+  if(len < 1)return html;
   for(var k=0; k<indents; k++){
     tabSpc += "<div class=\"basic-tab\"></div>";
   }
-  if(typeof item.id !== 'undefined'){
-    if(parentMap[item.id]){
-      s = tabSpc + "<span class=\"smlTxt\">Cycle continues ...</span><br/>"; 
-      return s;
+  var itemId = SharedGlobal.core.getItemId(sidx);
+  if(itemId > -1){
+    if(parentMap[itemId]){
+      html = tabSpc + "<span class=\"smlTxt\">Cycle continues ...</span><br/>"; 
+      return html;
     }
-    parentMap[item.id] = true;
+    parentMap[itemId] = true;
   }
-  var child = null;
   var isLink = false;
   for(var i=0; i<len; i++){
     label = iter.label(i);
     itemTitle = "";
-    child = iter.child(i);
     isLink = false;
     if(iter.isEngraftingLocation()){
       isLink = true;
     }
-    if(child && typeof child.s !== 'undefined')itemTitle = child.s;
+    var cinfo = iter.childInfo(i);
+    if(!cinfo.isNull && cinfo.typeof === 'object'){ 
+      itemTitle = SharedGlobal.core.getItemSubject(cinfo.id);
+    }
     sep = '::';
     if(itemTitle === '[anonymous]'){
       itemTitle = '';
@@ -102,19 +104,19 @@ function convertToHTML(iter,indents,parentMap){
     if(itemString === ''){
       itemString = '[unavailable]';
     }
-    s += tabSpc;
+    html += tabSpc;
     var curIdString = iter.getIdString();
     SharedGlobal.tic.push(curIdString);
     var imagesDir = SharedGlobal.core.getImageDirectoryPath();
     if(isLink){
-      s += "<div class=\"link-child-item\" id=\"" + curIdString + "\">" + itemString + "</div>";
-      s += "<img class=\"node-icon\" src=\"" + imagesDir + "/link-node.png\"/>";
+      html += "<div class=\"link-child-item\" id=\"" + curIdString + "\">" + itemString + "</div>";
+      html += "<img class=\"node-icon\" src=\"" + imagesDir + "/link-node.png\"/>";
     }
     else {
-      s += "<div class=\"basic-child-item\" id=\"" + curIdString + "\">" + itemString + "</div>";
+      html += "<div class=\"basic-child-item\" id=\"" + curIdString + "\">" + itemString + "</div>";
     }
-    s += "<br/>";
-    s += convertToHTML(iter.down(),indents + 1,parentMap);
+    html += "<br/>";
+    html += convertToExpandedBranchHTML(iter.down(),indents + 1,parentMap);
     iter.next();
   }
   len = iter.resourceItemCount();
@@ -123,25 +125,35 @@ function convertToHTML(iter,indents,parentMap){
     for(var j=0; j<len; j++){
       res = iter.resource(j);
       if(res.type == 'url'){
-        s += tabSpc; 
-        s += "<a href=\"" + res.url + "\"><span class=\"medTxt\"> ";
-        s += res.ttl + "</span></a><br/>";
+        html += tabSpc; 
+        html += "<a href=\"" + res.url + "\"><span class=\"medTxt\"> ";
+        html += res.ttl + "</span></a><br/>";
       }
     }
   }
-  if(typeof item.id !== 'undefined')parentMap[item.id] = false;
-  return s;
+  if(typeof itemId > -1)parentMap[itemId] = false;
+  return html;
+}
+
+function initializeForSampleCustomizerTblHTML(core,callback){
+  var iter = core.tracker;
+  ensureMinimalTableExists(iter);
+  var hpIdx = core.getHostPaneIndex();
+  core.setupResponsiveMenuitem(hpIdx,'author','add_row','outofbounds,navpath,container,child,resource','','','',SampleCustomizer.addTblRow);
+  core.setupResponsiveMenuitem(hpIdx,'author','add_cell','outofbounds,navpath,container,child,resource','','','',SampleCustomizer.addTblCell);
+  core.setupResponsiveMenuitem(hpIdx,'author','edit','child','','','',SampleCustomizer.handleSimpleEditOnTable);
+  core.setupResponsiveMenuitem(hpIdx,'author','remove','child','','','',function(e){core.removeItem(e);});
+  var wnd = core.getWindowPaneFromIndex(core.getHostPaneIndex());
+  core.setMaxWindowSize(wnd,975,-1);
 }
 
 function generateSampleCustomizerTblHTML(core,responseCallback){
   var html = "<table id=\"basic-tbl\">";
   var iter = core.tracker;
-  var cellOb = null;
-  var cia = core.childIds;
-  var rowCia = null;
   var curIdString = "";
-  for(var i=0; i<iter.childCount(); i++){
-    var rowOb = iter.child();
+  var len = iter.childCount();
+  for(var i=0; i<len; i++){
+    var cinfo = iter.childInfo(i);
     curIdString = iter.getIdString();
     html += "<tr class=\"table-row\">";
     SharedGlobal.tic.push(curIdString);
@@ -149,12 +161,13 @@ function generateSampleCustomizerTblHTML(core,responseCallback){
     var dynamicLabel = iter.label(i);
     if(dynamicLabel === 'r[n]'){
       dynamicLabel = "r" + Number(i + 1).toString();
-      rowOb.s = "row" + Number(i + 1).toString();
+      SharedGlobal.core.setItemSubject(cinfo.id,"row" + Number(i + 1).toString());
     }
     html += '<div class="basic-row-title"><div class="default-title-txt-frm">' + dynamicLabel + '</div></div></td>';
-    var iter2 = iter.down();
-    if(rowOb){
-      for(var j=0; j<iter2.childCount(); j++){
+    if(cinfo.exists && !cinfo.isNull){ //todo: check for leaf string or repair at initialization
+      var iter2 = iter.down();
+      var len2 = iter2.childCount();
+      for(var j=0; j<len2; j++){
         curIdString = iter2.getIdString();
         SharedGlobal.tic.push(curIdString);
         html += "<td class=\"table-cell\" id=\"" + curIdString + "\">";
@@ -163,7 +176,7 @@ function generateSampleCustomizerTblHTML(core,responseCallback){
           html += '<div class="basic-child-item">' + label + '</div>';
         }
         else {
-          html += core.generateHTMLFromScopeId(iter2.child(),iter2.getChildScopeIndex(),core);
+          html += core.generateHTMLFromScopeId(cinfo.id,core);
         }
         html += "</td>";
         iter2.next();
@@ -173,7 +186,7 @@ function generateSampleCustomizerTblHTML(core,responseCallback){
     }
   }
   html += "</table>";
-  html += SharedGlobal.getResourceItemsHTML(core.scopeItem);
+  html += SharedGlobal.getResourceItemsHTML(core.scopeItemIndex);
 
   var tic = SharedGlobal.tic;
   responseCallback({appletValuesMap:{isMultiLevel:true,explicitChildCount:tic.getNonResIdCount(),explicitResourceCount:tic.getResIdCount()}});
@@ -195,9 +208,18 @@ SampleCustomizer.checkRepairTblObject = function(iter){
   var subjArr = [];
   var toRemoveArr = [];
   for(var i=0; i<len; i++){
-    var c = iter.child();
-    if(typeof c === 'undefined')continue;
-    c.s = iter.label();
+    var cinfo = iter.childInfo();
+    if(cinfo.exists){
+      if(cinfo.typeof === 'object' && !cinfo.isNull){
+        core.setItemSubject(cinfo.id,iter.label()); 
+      }
+      else{
+        if(cinfo.typeof === 'string'){
+
+        }
+        continue;
+      }
+    }
     var iter2 = iter.down();
     var len2 = iter2.childCount();
     for(var j=0; j<len2; j++){
@@ -208,11 +230,11 @@ SampleCustomizer.checkRepairTblObject = function(iter){
         toRemoveArr.push({parentId:iter3.tempScopeItemIndex,childIdx:k});
         iter3.next();
       }
-      var gc = iter2.child();
-      if(typeof gc === 'object' && gc){
-        //leafLabel = gc.labs[0];
-        //removeItem(c,i);
-        insertPercept(c,i,leafLabel);
+      var cinfo2 = iter2.childInfo();
+      if(cinfo2.exists && !cinfo2.isNull && cinfo2.typeof === 'object'){
+        var leafLabel = "";
+        //not finished here, more work to do!
+        insertLeafString(cinfo2.id,i,leafLabel);
       }
       iter2.next();
     }
@@ -221,26 +243,18 @@ SampleCustomizer.checkRepairTblObject = function(iter){
 }
 
 function ensureMinimalTableExists(iter){
+  var sidx = iter.tempScopeItemIndex;
   if(iter.childItemCount() == 0){
-    var nuItem = SharedGlobal.core.createNewVaultItem();
-    nuItem.hdTtl = true;
-    nuItem.s = "row[n]";
-    var pid = SharedGlobal.core.addVaultItem(iter.getScopeIndex(),"r[n]",nuItem,0);
-    SharedGlobal.core.addVaultItem(pid,"",'-',0);
+    var nuId = SharedGlobal.core.createAndInsertVaultItem(sidx,0);
+    SharedGlobal.core.setItemSubject(nuId,'row[n]');
   }
-}
-
-function initializeForSampleCustomizerTblHTML(core,callback){
-  var rootOb = core.scopeItem;
-  var iter = core.tracker;
-  ensureMinimalTableExists(iter);
-  var hpIdx = core.getHostPaneIndex();
-  core.setupResponsiveMenuitem(hpIdx,'author','add_row','outofbounds,navpath,container,child,resource','','','',SampleCustomizer.addTblRow);
-  core.setupResponsiveMenuitem(hpIdx,'author','add_cell','outofbounds,navpath,container,child,resource','','','',SampleCustomizer.addTblCell);
-  core.setupResponsiveMenuitem(hpIdx,'author','edit','child','','','',SampleCustomizer.handleSimpleEditOnTable);
-  core.setupResponsiveMenuitem(hpIdx,'author','remove','child','','','',function(e){core.removeItem(e);});
-  var wnd = core.getWindowPaneFromIndex(core.getHostPaneIndex());
-  core.setMaxWindowSize(wnd,975,-1);
+  var len = iter.childCount();
+  for(var i=0; i<len; i++){
+    var cinfo = iter.childInfo(i);
+    if(cinfo.isNull || cinfo.typeof === 'string'){
+      SharedGlobal.core.promoteVaultItemToObject(sidx,i,false);
+    }
+  }
 }
 
 function handleSampleCustomizerKeyDown(e,core,responseCallback){
@@ -265,41 +279,41 @@ SampleCustomizer.handleSimpleEditOnTable = function(){
 }
 
 SampleCustomizer.handleSimpleEditOnTbl = function(event,core,responseCallback){
+  var core = SharedGlobal.core;
+  var sc = SampleCustomizer;
   var handled = false;
-  if(SharedGlobal.core.getCurrentTabIdsRgn() !== 'child')return false;
-  var scopeItem = SharedGlobal.core.scopeItem;
-  var scopeItemIndex = SharedGlobal.core.scopeItemIndex;
-  var iter = SharedGlobal.core.tracker;
-  var wnd = SharedGlobal.core.getWindowPaneFromIndex(SharedGlobal.core.getActivePaneIndex());
+  if(core.getCurrentTabIdsRgn() !== 'child')return false;
+  var sidx = core.scopeItemIndex;
+  var wnd = core.getWindowPaneFromIndex(core.getActivePaneIndex());
   var encodedIdArr = wnd.tabIdsArr[wnd.tabIdsPos].split('_');
-  var parentIndex = SampleCustomizer.currentPid = encodedIdArr[1];
-  var childIndex = SampleCustomizer.currentChildIndex = encodedIdArr[2];
-  var currentItem = SampleCustomizer.currentItem = SharedGlobal.core.getItemFromBankIndex(parentIndex);
+  var pid = sc.currentPid = encodedIdArr[1]; //pid - parent id
+  var cidx = sc.currentChildIndex = encodedIdArr[2]; //cidx - child index
   var val = "";
   var editMsg = "";
-  if(scopeItem.apcd === 'SampleCustomizer1'){
-    if(scopeItemIndex === Number(parentIndex)){
-      SampleCustomizer.currentOp = "edit-row";
+  var apCode = core.getItemAppCode(sidx);
+  if(apCode === 'SampleCustomizer1'){
+    if(sidx === Number(pid)){
+      sc.currentOp = "edit-row";
       /*
         For the purpose of interchangeability of vault data along with spatial efficiency, we support three locations for configuring vault item naming:  percepts, vault item strings, and a subject field of vault item objects. Any of these could be in use for data that is converted to a table. The 'auto-configured label' functionality provides shared handling of edits where each location can impact a conceptual, derived label. To support a single location would work also and achieve greater code simplicity, but it is likely to have some limiting effect on porting vault data from one applet to another
       */
-      val = SharedGlobal.core.getAutoConfiguredLabel(scopeItem,childIndex);
+      val = core.getAutoConfiguredLabel(pid,cidx);
       editMsg = "Row label:"; 
     }
     else {
-      var si = SharedGlobal.core.getSelectionInfo();
-      var item = si.scopeItem.c[si.zoneIndex];
-      if(typeof item !== 'string'){
+      var si = core.getSelectionInfo();
+      var cinfo = core.getItemChildInfo(si.scopeIndex,si.zoneIndex);
+      if(cinfo.exists && !cinfo.isNull && cinfo.typeof === 'object'){
         //todo: navigate to object so that edits can be done using the proper scope item app code
         return;
       }
-      SampleCustomizer.currentOp = "edit-cell";
-      val = item;
+      sc.currentOp = "edit-cell";
+      val = core.getAutoConfiguredLabel(si.scopeIndex,si.zoneIndex); //safe for previously non-table structures
       editMsg = "Cell contents:";
     }
-    SharedGlobal.core.setSimpleEditMessage(editMsg);
-    SharedGlobal.core.setOnAcceptSimpleEditFunc(SampleCustomizer.onAcceptSimpleEditForTable);
-    SharedGlobal.core.displayCorePopup('simple-edit-pane');
+    core.setSimpleEditMessage(editMsg);
+    core.setOnAcceptSimpleEditFunc(sc.onAcceptSimpleEditForTable);
+    core.displayCorePopup('simple-edit-pane');
     var elmt = document.getElementById('se-dialog-single-item');
     elmt.value = val;
     handled = true;
@@ -308,70 +322,70 @@ SampleCustomizer.handleSimpleEditOnTbl = function(event,core,responseCallback){
 }
 
 SampleCustomizer.onAcceptSimpleEditForTable = function(value){
+  var sc = SampleCustomizer;
+  var core = SharedGlobal.core;
   var dataModified = false;
-  var iter = SharedGlobal.core.tracker;
-  var item = SampleCustomizer.currentItem;
-  if(SampleCustomizer.currentOp === 'edit-row'){
-    SharedGlobal.core.updateAutoConfiguredLabel(SampleCustomizer.currentItem,SampleCustomizer.currentChildIndex,value);    
+  var wnd = core.getWindowPaneFromIndex(core.getActivePaneIndex());
+  var encodedIdArr = wnd.tabIdsArr[wnd.tabIdsPos].split('_');
+  var pid = encodedIdArr[1];
+  var cidx = encodedIdArr[2];
+  if(sc.currentOp === 'edit-row'){
+    core.updateAutoConfiguredLabel(pid,cidx,value);    
     dataModified = true;
   }
-  if(SampleCustomizer.currentOp === 'edit-cell'){
-    var si = SharedGlobal.core.getSelectionInfo();
-    var item = si.scopeItem.c[si.zoneIndex];
-    if(item){
-      SharedGlobal.core.updateAutoConfiguredLabel(si.scopeItem,SampleCustomizer.currentChildIndex,value);    
-    }
-    dataModified = true;
-  }
-  SharedGlobal.core.dismissCurrentDialogBox();
-  if(dataModified)SharedGlobal.core.requestRedraw(true);
+  //dataModified = true;
+  core.dismissCurrentDialogBox();
+  if(dataModified)core.requestRedraw(true);
 }
 
 SampleCustomizer.addTblRow = function(e){
-  var childIndex = -1;
-  var encodedIdArr = [];
-  var rgn = SharedGlobal.core.getCurrentTabIdsRgn();
-  var rowItem = SharedGlobal.core.createNewVaultItem();
-  var cia = SharedGlobal.core.childIds;
-  var scopeItemIndex = SharedGlobal.core.scopeItemIndex;
-  rowItem.hdTtl = true;
-  if(rgn === 'child'){
-    var wnd = SharedGlobal.core.getWindowPaneFromIndex(SharedGlobal.core.getActivePaneIndex());
-    encodedIdArr = wnd.tabIdsArr[wnd.tabIdsPos].split('_');
-    var parentId = encodedIdArr[1];
-    childIndex = encodedIdArr[2];
-    if(scopeItemIndex !== Number(parentId)){
-      var cia = SharedGlobal.core.childIds[scopeItemIndex];
-      for(var i=0; i<cia.length; i++){
-        var pid = Number(parentId);
-        if(cia[i] === pid){
-          childIndex = i;
-          break;
-        }
-      }
-    }
-  }
-  SharedGlobal.core.addVaultItem(scopeItemIndex,"r[n]",rowItem,childIndex);
-  SharedGlobal.core.requestRedraw(true); //if vault structure
-                                    //or tab ids have changed, pass in true 
-}
-
-SampleCustomizer.addTblCell = function(e){
-  var parentIndex = -1;
-  var childIndex = -1;
-  var encodedIdArr = [];
   var core = SharedGlobal.core;
-  var scopeItemIndex = core.scopeItemIndex;
+  var sidx = core.scopeItemIndex; 
+  var cidx = -1; //cidx - child index
+  var encodedIdArr = [];
   var rgn = core.getCurrentTabIdsRgn();
   if(rgn === 'child'){
     var wnd = core.getWindowPaneFromIndex(core.getActivePaneIndex());
     encodedIdArr = wnd.tabIdsArr[wnd.tabIdsPos].split('_');
-    parentIndex = Number(encodedIdArr[1]);
-    childIndex = Number(encodedIdArr[2]);
-    if(parentIndex == scopeItemIndex){ //should be a row item id
-      parentIndex = core.childIds[scopeItemIndex][childIndex];
+    var parentId = encodedIdArr[1];
+    cidx = encodedIdArr[2];
+    if(sidx !== Number(parentId)){
+      var len = core.getItemChildCount(sidx); 
+      for(var i=0; i<len; i++){
+        var cinfo = core.getItemChildInfo(i);
+        if(cinfo.id == pid){
+          cidx = i;
+          break;
+        }
+      }      
     }
-    core.addVaultItem(parentIndex,"","-",childIndex);
+  } 
+  var nuId = core.createAndInsertVaultItem(sidx,cidx);
+  core.setItemSubject(nuId,'r[n]');
+  core.requestRedraw(true); //if vault structure
+                                    //or tab ids have changed, pass in true 
+}
+
+SampleCustomizer.addTblCell = function(e){
+  var core = SharedGlobal.core;
+  var pid = -1;
+  var cidx = -1;
+  var encodedIdArr = [];
+  var sidx = core.scopeItemIndex;
+  var rgn = core.getCurrentTabIdsRgn();
+  if(rgn === 'child'){
+    var wnd = core.getWindowPaneFromIndex(core.getActivePaneIndex());
+    encodedIdArr = wnd.tabIdsArr[wnd.tabIdsPos].split('_');
+    pid = Number(encodedIdArr[1]);
+    cidx = Number(encodedIdArr[2]);
+    if(pid == sidx){ //should be a row item id
+      var cinfo = core.getItemChildInfo(sidx,cidx);
+      if(cinfo.typeof === 'string' || cinfo.isNull){
+        core.promoteVaultItemToObject(sidx,cidx,false);
+      }
+      pid = core.getItemChildId(sidx,cidx);
+    }
+    core.insertLeafString(pid,cidx,"-");
   }
   else {
     alert('Please first select a row or cell item within a row in order to add a cell.');
@@ -382,10 +396,11 @@ SampleCustomizer.addTblCell = function(e){
 }
 
 function generateSampleCustomizerCellHTML(core,responseCallback){
-  var scopeItem = core.scopeItem;
-  var label = "-";
   var itemId = 'cn-item-0';
-  if(scopeItem.labs.length > 0)label = scopeItem.labs[0];
+  var label = core.getAutoConfiguredLabel(sidx,0); 
+  if(label === ""){
+    label = "-";
+  }
   var html =  "<div class=\"basic-child-item\" id=\"" + itemId + "\">" + label + "</div>";
   SharedGlobal.tic.push(itemId);
   var retData = {};

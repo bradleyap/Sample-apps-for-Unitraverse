@@ -62,67 +62,66 @@ DataSlinger.displayOptions = {"personalInfo":{"name":"personal contact","style":
 
 
 ///////////// Data Entry Form  ///////////////////////////////
- 
+
 function initializeDataEntryFormApplet(core,callback){
-  var scopeItem = core.scopeItem;
-  if(typeof scopeItem.storageId === 'undefined'){
+  var sidx = core.scopeItemIndex;  
+  var d = core.getItemData(sidx,true);
+  if(typeof d.storageId === 'undefined'){
     var sid = SharedGlobal.core.getTemporaryVaultUniqueId();
-    SharedGlobal.core.setAutoManagedNonSerializableField(scopeItem,"storageId",sid);
+    SharedGlobal.core.setAutoManagedNonSerializableField(d,"storageId",sid);
   }
-  if(typeof DataSlinger.state[scopeItem.storageId] === 'undefined'){
-    DataSlinger.initializeTempStoreForRecordInstance(scopeItem);
+  if(typeof DataSlinger.state[d.storageId] === 'undefined'){
+    DataSlinger.initializeTempStoreForRecordInstance(d);
   }
-  var tempStore = DataSlinger.state[scopeItem.storageId];
+  var tempStore = DataSlinger.state[d.storageId];
   var token = core.getPersistentDrawingInstanceToken();
   if(typeof tempStore[token] === 'undefined'){
     tempStore[token] = {returnToClient:false,isEditing:false};
   }
-  var retData = {}; 
-  retData['blockNonNavigationShortcuts'] = true;
-  retData['suspendPlatformHzArrowKeyHandling'] = true;
-  //when an aggregator is not the scope item, it is not mediating messages, otherwise these messages are routed through aggregators
-  retData['onChangeSelectionCycleRegionHandler'] = DataSlinger.focusReturningToApplet;
-  retData['sunsetNotificationHandler'] = DataSlinger.sunsetNotifcationHandler;
-  retData['saveNotificationHandler'] = DataSlinger.moveDataToScopeItem;
-  callback(retData);
+  /*
+    When an aggregator is not the scope item, it is not mediating messages, otherwise these messages are routed through aggregators
+  */
+  callback({blockNonNavigationShortcuts:true,suspendPlatformHzArrowKeyHandling:true,onChangeSelectionCycleRegionHandler:DataSlinger.focusReturningToApplet,sunsetNotificationHandler:DataSlinger.sunsetNotifcationHandler,saveNotificationHandler:DataSlinger.moveDataToScopeItem});
 }
  
-DataSlinger.initializeTempStoreForRecordInstance = function(scopeItem){
+DataSlinger.initializeTempStoreForRecordInstance = function(itemData){
   var tempStore = {};
   tempStore.numRepeatedMap = {};
   tempStore.keyToIndexMap = {};
   tempStore.schema = {};
   tempStore.schema.keys = [];
-  if(typeof scopeItem.recordScheme !== 'undefined'){
-    tempStore.schema = DataSlinger.recordTypes[scopeItem.recordScheme];
+  if(typeof itemData.recordScheme !== 'undefined'){
+    tempStore.schema = DataSlinger.recordTypes[itemData.recordScheme];
   }
   tempStore.cloneableIndexInfoMap = DataSlinger.createCloneInfoMapFromSchema(tempStore.schema);
   var schema = tempStore.schema;
   for(var i=0; i<schema.keys.length; i++){
     tempStore.keyToIndexMap[schema.keys[i]] = i;
   }
-  DataSlinger.state[scopeItem.storageId] = tempStore;
+  DataSlinger.state[itemData.storageId] = tempStore;
   return tempStore;
 };
 
-DataSlinger.initializeEntryForClient = function(entry){
-  if(typeof entry.recordScheme !== 'undefined'){
-    if(typeof entry.storageId === 'undefined'){
+DataSlinger.initializeEntryForClient = function(itemId){
+  var itemData = SharedGlobal.core.getItemData(itemId,true);
+  if(typeof itemData.recordScheme !== 'undefined'){
+    if(typeof itemData.storageId === 'undefined'){
       var sid = SharedGlobal.core.getTemporaryVaultUniqueId();
-      SharedGlobal.core.setAutoManagedNonSerializableField(entry,"storageId",sid);
+      SharedGlobal.core.setAutoManagedNonSerializableField(itemData,"storageId",sid);
     }
-    if(typeof DataSlinger.state[entry.storageId] === 'undefined'){
-      DataSlinger.initializeTempStoreForRecordInstance(entry);
+    if(typeof DataSlinger.state[itemData.storageId] === 'undefined'){
+      DataSlinger.initializeTempStoreForRecordInstance(itemData);
     }
   }
 }
 
 function dataRecordDrawCycleNotificationHandler(msg,window){
   if(msg === 'BEFORE_DESTROY_DOM'){
-    var scopeItem = SharedGlobal.core.scopeItem;
-    var tempStore = DataSlinger.state[scopeItem.storageId];
-    if(typeof DataSlinger.state[scopeItem.storageId] === 'undefined'){
-      DataSlinger.initializeTempStoreForRecordInstance(scopeItem);
+    var sidx = SharedGlobal.core.scopeItemIndex;
+    var itemData = SharedGlobal.core.getItemData(sidx,true);
+    var tempStore = DataSlinger.state[itemData.storageId];
+    if(typeof DataSlinger.state[itemData.storageId] === 'undefined'){
+      DataSlinger.initializeTempStoreForRecordInstance(sidx);
     }
     var token = SharedGlobal.core.getPersistentDrawingInstanceToken();
     var store = tempStore[token];
@@ -135,10 +134,11 @@ function dataRecordDrawCycleNotificationHandler(msg,window){
 
 function generateDataEntryFormHTML(core,responseCallback){ 
   var ds = DataSlinger;
-  var scopeItem = core.scopeItem;
+  var sidx = core.scopeItemIndex;
+  var itemData = core.getItemData(sidx,true); //true causes a data object to be created
   var html = "";
   var wnd = core.getDrawingPaneIndex();
-  if(typeof scopeItem.recordScheme === 'undefined'){ 
+  if(typeof itemData.recordScheme === 'undefined'){ 
     html = "<div class=\"basic-child-item\">";
     html += "<div class=\"spacer-item\"></div><div class=\"basic-tab\"></div>";
     html += "<br/><div class=\"basic-tab\"></div><div class=\"basic-tab\"></div>Please select from the following record templates:"; 
@@ -156,14 +156,14 @@ function generateDataEntryFormHTML(core,responseCallback){
   }
   var token = core.getPersistentDrawingInstanceToken();
   var editInProgress = false;
-  if(ds.isCurrentlyBeingEditedElsewhere(scopeItem,token)){
+  if(ds.isCurrentlyBeingEditedElsewhere(sidx,token)){
     html += "<div class=\"basic-child-item\">This vault item is being edited elsewhere</div>";
   }
   else {
-    if(ds.isNodeObjectRegisteredForEditing(scopeItem) == false){
-      ds.currentlyBeingEditedArr[ds.currentlyBeingEditedArr.length] = {scopeItem:scopeItem,diToken:token};
+    if(ds.isNodeObjectRegisteredForEditing(sidx) == false){
+      ds.currentlyBeingEditedArr[ds.currentlyBeingEditedArr.length] = {scopeItemId:sidx,diToken:token};
     }
-    var tempStore = ds.state[scopeItem.storageId];
+    var tempStore = ds.state[itemData.storageId];
     var store = tempStore[token];
     store.isEditing = true; 
     var schema = tempStore.schema;
@@ -176,9 +176,6 @@ function generateDataEntryFormHTML(core,responseCallback){
     var num = 1;
     var drawEmptyItem = false;
     tempStore.numRepeatedMap = {};
-    if(typeof scopeItem.d === 'undefined'){
-      scopeItem.d = {};
-    }
     html = "<form name=\"recordViewAppletForm" + token + "\" class=\"form-bg-panel\" autocomplete=\"off\">";
     for(var i=0; i<keys.length; i++){
       curIdString = keys[i] + "_" + token + "_fld";
@@ -199,7 +196,7 @@ function generateDataEntryFormHTML(core,responseCallback){
           curLabel = ds.getNumericAdjective(labels[i],num);
           drawEmptyItem = false;
           if(cloneableIndexInfoMap[i].addedEmptyFieldsMap[curKey])drawEmptyItem = true;
-          if(typeof scopeItem.d[curKey] !== 'undefined' || drawEmptyItem){
+          if(typeof itemData[curKey] !== 'undefined' || drawEmptyItem){
             tempStore.numRepeatedMap[keys[i]]++;
             curIdString = keys[i] + "_" + Number(num).toString() + "_" + token + "_fld";
             SharedGlobal.tic.push(curIdString);
@@ -221,32 +218,25 @@ function generateDataEntryFormHTML(core,responseCallback){
     SharedGlobal.tic.push(returnBtnId);
     html += "<div class=\"dyn-btn-wrapper-item\"><div class=\"hidlwrap\"></div><div class=\"dyn-edit-fld-emulator\"><div class=\"dyn-ret-button\" id=\"" + returnBtnId + "\" onclick=\"DataSlinger.returnToClientScope(this)\">done</div></div></div>";
     html += "</form>";
-    var retData = {};
-    var appletValues = {};
-    appletValues['isMultiLevel'] = true;
-    appletValues['explicitChildCount'] = SharedGlobal.tic.getNonResIdCount();
-    appletValues['explicitResourceCount'] = 0;
-    appletValues['postHTMLInstallAppletInfo'] = {method:ds.postHTMLInstallForDataEntryForm,data:{}};
-    retData['appletValuesMap'] = appletValues;
-    responseCallback(retData);
+    responseCallback({appletValuesMap:{isMultiLevel:true,explicitChildCount:SharedGlobal.tic.getNonResIdCount(),explicitResourceCount:0,postHTMLInstallAppletInfo:{method:ds.postHTMLInstallForDataEntryForm,data:{}}}});
   }
   return html;
 }
 
-DataSlinger.isCurrentlyBeingEditedElsewhere = function(item,drawingInstanceToken){
+DataSlinger.isCurrentlyBeingEditedElsewhere = function(itemId,drawingInstanceToken){
   var arr = DataSlinger.currentlyBeingEditedArr;
   for(var i=0; i<arr.length; i++){
     var info = arr[i];
-    if(item == info.scopeItem && drawingInstanceToken != info.diToken)return true;
+    if(itemId == info.scopeItemId && drawingInstanceToken != info.diToken)return true;
   }
   return false;
 };
 
-DataSlinger.isNodeObjectRegisteredForEditing = function(item){
+DataSlinger.isNodeObjectRegisteredForEditing = function(itemId){
   var arr = DataSlinger.currentlyBeingEditedArr;
   for(var i=0; i<arr.length; i++){
     var info = arr[i];
-    if(item == info.scopeItem)return true;
+    if(itemId == info.scopeItemId)return true;
   }
   return false;
 }
@@ -275,9 +265,9 @@ DataSlinger.removeNodeObjectFromEditRegistryByDrawingInstance = function(drawing
 }
 
 DataSlinger.postHTMLInstallForDataEntryForm = function(){
-  var scopeItem = SharedGlobal.core.scopeItem;
-  var schema = DataSlinger.state[scopeItem.storageId].schema;
-  DataSlinger.moveDataToPage(scopeItem,schema);
+  var d = SharedGlobal.core.getItemData(SharedGlobal.core.scopeItemIndex,true);
+  var schema = DataSlinger.state[d.storageId].schema;
+  DataSlinger.moveDataToPage(d,schema);
 };
 
 DataSlinger.getNumericAdjective = function(label,num){
@@ -295,9 +285,8 @@ DataSlinger.returnToClientScope = function(elmt){
     return;
   }
   var arr = elmt.id.split('-');
-  //var token = arr[2];
   var token = SharedGlobal.core.getPersistentDrawingInstanceToken();
-  var storageId = SharedGlobal.core.scopeItem.storageId;
+  var storageId = SharedGlobal.core.getItemData(SharedGlobal.core.scopeItemIndex,true).storageId;
   var store = DataSlinger.state[storageId][token];
   store.isEditing = false;
   store.returnToClient = false;
@@ -332,17 +321,17 @@ DataSlinger.assembleDataEntryFormHTMLFromGrammarAndStyle = function(grammar,sche
   return html;
 };
 
-DataSlinger.getDataEntryFormHTMLForAggregator = function(entryId,scopeItem,fmt){
+DataSlinger.getDataEntryFormHTMLForAggregator = function(entryId,scopeId,fmt){
   var html = "<div class=\"ag-entry\" id=\"" + entryId + "\">";
-  var tempStore = DataSlinger.state[scopeItem.storageId];
+  var itemData = SharedGlobal.core.getItemData(scopeId,true);
+  var tempStore = DataSlinger.state[itemData.storageId];
   var schema = tempStore.schema;
-  var recType = DataSlinger.recordTypes[scopeItem.recordScheme];
+  var recType = DataSlinger.recordTypes[itemData.recordScheme];
   var displayInfo = DataSlinger.displayOptions[recType['def_display']];
   if(typeof displayInfo === 'undefined')displayInfo = DataSlinger.styles['s1'];
   var attemptDraw = true;
   if(typeof schema === 'undefined' || schema == null)attemptDraw = false;
   if(typeof displayInfo === 'undefined')attemptDraw = false;
-  if(typeof scopeItem.d === 'undefined')attemptDraw = false;
   if(attemptDraw){
     var grammar = displayInfo['grammar'];
     var styleInfo = DataSlinger.styles[displayInfo.style];
@@ -353,22 +342,22 @@ DataSlinger.getDataEntryFormHTMLForAggregator = function(entryId,scopeItem,fmt){
     var labelsArr = [];
     var pos = 0;
     for(var i=0; i<schema.keys.length; i++){
-      if(typeof scopeItem.d[schema.keys[i]] === 'undefined')continue;
+      if(typeof itemData[schema.keys[i]] === 'undefined')continue;
       keysArr[pos] = schema.keys[i];
       keysMap[schema.keys[i]] = true;
       labelsArr[pos] = schema.labels[i];
-      valuesArr[pos] = scopeItem.d[schema.keys[i]];
+      valuesArr[pos] = itemData[schema.keys[i]];
       pos++;
       if(typeof tempStore.cloneableIndexInfoMap[i] !== 'undefined'){
         var num = 2;
         var curKey = "";
         while(num > 1){
           curKey = schema.keys[i] + Number(num).toString();
-          if(typeof scopeItem.d[curKey] === 'undefined')break;
+          if(typeof itemData[curKey] === 'undefined')break;
           keysMap[curKey] = true;
           labelsArr[pos] = DataSlinger.getNumericAdjective(schema.labels[i],num);
           keysArr[pos] = curKey;
-          valuesArr[pos] = scopeItem.d[curKey];
+          valuesArr[pos] = itemData[curKey];
           pos++;
           num++;
         }
@@ -378,7 +367,7 @@ DataSlinger.getDataEntryFormHTMLForAggregator = function(entryId,scopeItem,fmt){
       html += "<table>";
       for(var i=0; i<keysArr.length; i++){
         html += "<tr>";
-        html += "<td align=\"right\"><b>" + labelsArr[i] + ": </b></td><td><span class=\"med-spacer-item\"></span>" + scopeItem.d[keysArr[i]] + "</td>";
+        html += "<td align=\"right\"><b>" + labelsArr[i] + ": </b></td><td><span class=\"med-spacer-item\"></span>" + itemData[keysArr[i]] + "</td>";
         html += "</tr>";
       }
       html += "</table>";
@@ -476,10 +465,10 @@ function dataEntryOnChangeDropdown(ctrl){
   var elmt = document.getElementById('rec-type-choices');
   if(elmt){
     selStr = elmt.options[elmt.selectedIndex].value;
-    var scopeItem = SharedGlobal.core.scopeItem;
-    scopeItem.recordScheme = selStr;    
-    var tempStore = DataSlinger.state[scopeItem.storageId];
-    tempStore.schema = DataSlinger.recordTypes[scopeItem.recordScheme];
+    var itemData = SharedGlobal.core.getItemData(SharedGlobal.core.scopeItemIndex,true);
+    itemData.recordScheme = selStr;    
+    var tempStore = DataSlinger.state[itemData.storageId];
+    tempStore.schema = DataSlinger.recordTypes[itemData.recordScheme];
     tempStore.cloneableIndexInfoMap = DataSlinger.createCloneInfoMapFromSchema(tempStore.schema);
     SharedGlobal.core.requestRedraw(false);
     SharedGlobal.core.promptToSave(false);
@@ -511,7 +500,8 @@ DataSlinger.focusReturningToApplet = function(){
 
 DataSlinger.sunsetNotifcationHandler = function(){
   var token = SharedGlobal.core.getPersistentDrawingInstanceToken();
-  var tempStore = DataSlinger.state[SharedGlobal.core.scopeItem.storageId];
+  var itemData = SharedGlobal.core.getItemData(SharedGlobal.core.scopeItemIndex,true);
+  var tempStore = DataSlinger.state[itemData.storageId];
   var store = tempStore[token];
   store.returnToClient = false;
   store.isEditing = false;
@@ -520,8 +510,8 @@ DataSlinger.sunsetNotifcationHandler = function(){
 }
 
 DataSlinger.moveDataToScopeItem = function(token){
-  var scopeItem = SharedGlobal.core.scopeItem;
-  var tempStore = DataSlinger.state[scopeItem.storageId];
+  var itemData = SharedGlobal.core.getItemData(SharedGlobal.core.scopeItemIndex,true);
+  var tempStore = DataSlinger.state[itemData.storageId];
   var schema = tempStore.schema;
   var curKey = "";
   var elmt = null;
@@ -535,8 +525,11 @@ DataSlinger.moveDataToScopeItem = function(token){
   if(typeof elmts === 'undefined' || elmts == null){
     return;
   }
-  delete scopeItem['d'];
-  scopeItem.d = {};
+  var storageIdBuf = itemData.storageId;
+  var recordSchemeBuf = itemData.recordScheme; 
+  itemData = SharedGlobal.core.clearItemData(SharedGlobal.core.scopeItemIndex,true);
+  itemData.storageId = storageIdBuf;
+  itemData.recordScheme = recordSchemeBuf;
   for(var i=0; i<elmts.length; i++){
     elmt = elmts[i];
     curKey = elmt.id.split('_')[0];
@@ -576,7 +569,8 @@ DataSlinger.moveDataToScopeItem = function(token){
   }
   for(var i=0; i<valuesArr.length; i++){
     if(valuesArr[i] !== "" && typeof keysArr[i] !== 'undefined'){
-      scopeItem.d[keysArr[i]] = valuesArr[i];
+      //scopeItem.d[keysArr[i]] = valuesArr[i];
+      itemData[keysArr[i]] = valuesArr[i]; 
     }
     else {
       curKey = keysArr[i];
@@ -584,17 +578,17 @@ DataSlinger.moveDataToScopeItem = function(token){
   }
 };
 
-DataSlinger.moveDataToPage = function(scopeItem,schema){
+DataSlinger.moveDataToPage = function(itemData,schema){
   var curKey = "";
   var curId = "";
   var numRepeats = -1;
-  var tempStore = DataSlinger.state[scopeItem.storageId];
+  var tempStore = DataSlinger.state[itemData.storageId];
   var token = SharedGlobal.core.getPersistentDrawingInstanceToken();
   for(var i=0; i<schema.keys.length; i++){
     curKey = schema.keys[i];
     curId = schema.keys[i] + "_" + token + "_fld";
-    if(typeof scopeItem.d[curKey] === 'undefined')continue;
-    document.getElementById(curKey + "_" + token + "_fld").value = scopeItem.d[curKey];
+    if(typeof itemData[curKey] === 'undefined')continue;
+    document.getElementById(curKey + "_" + token + "_fld").value = itemData[curKey];
     numRepeats = tempStore.numRepeatedMap[curKey];
     if(typeof numRepeats === 'undefined')numRepeats = -1;
     for(var j=0; j<numRepeats;j++){
@@ -602,8 +596,8 @@ DataSlinger.moveDataToPage = function(scopeItem,schema){
         curKey = schema.keys[i] + Number(j+1).toString();
         curId = schema.keys[i] + "_" + Number(j + 1).toString() + "_" + token + "_fld";
       }
-      if(typeof scopeItem.d[curKey] !== 'undefined'){
-        document.getElementById(curId).value = scopeItem.d[curKey];
+      if(typeof itemData[curKey] !== 'undefined'){
+        document.getElementById(curId).value = itemData[curKey];
       }
     }
   }
@@ -620,8 +614,6 @@ DataSlinger.detectTabIdChangeAndUpdate = function(){
     if(mrElmt){
       mrElmt.blur();
     }
-    //DataSlinger.selectedElmt = document.getElementById(tabId);
-    //DataSlinger.selectedElmt.focus();
   }
   else{
     var curElmt = document.getElementById(tabId);
@@ -636,7 +628,7 @@ function handleDataEntryFormMouseDown(e){
 
 };
 
-DataSlinger.getFindables = function(string,scopeItem){
+DataSlinger.getFindables = function(string,scopeId){
   console.log("getFindables has been called");
 };
 
@@ -645,9 +637,9 @@ DataSlinger.getFindables = function(string,scopeItem){
 ///////////// Data Aggregator  ///////////////////////////////
 
 DataSlinger.onAddItem = function(btn){
-  var scopeItem = SharedGlobal.core.scopeItem;
-  if(typeof scopeItem.recordScheme === 'undefined')return; 
-  var tempStore = DataSlinger.state[scopeItem.storageId];
+  var itemData = SharedGlobal.core.getItemData(SharedGlobal.core.scopeItemIndex,true);
+  if(typeof itemData.recordScheme === 'undefined')return; 
+  var tempStore = DataSlinger.state[itemData.storageId];
   var schema = tempStore.schema; 
   var html = "";
   var arr = btn.id.split('_');
@@ -664,26 +656,20 @@ DataSlinger.onAddItem = function(btn){
 };
 
 function initializeRecordAggregatorApplet(core,callback){
-  var scopeItem = core.scopeItem;
-  //change set 271
-  //scopeItem.hdTtl = false;
+  var sidx = core.scopeItemIndex;
   var wndIdx = core.getHostPaneIndex();
   core.setupResponsiveMenuitem(wndIdx,'author','add_record','anyregion',null,'','',DataSlinger.addNewRecordEntry);
   core.setupResponsiveMenuitem(wndIdx,'author','remove','child',null,'','',function(e){core.removeItem(e)});
   core.setupResponsiveMenuitem(wndIdx,'author','edit','child',null,'','',DataSlinger.doEditItemHandler);
 
   //cycle through and initialize all child data records
-  //change set 271
-  //for(var i=0; i<scopeItem.c.length; i++){
   var iter = core.getTracker();
   var len = iter.childCount();
   for(var i=0; i<len; i++){
-    //change set 271
-    //if(scopeItem.c[i] == null)continue; //test code uses atypical children here
     var cinfo = iter.childInfo(i);
     if(!cinfo.exists || cinfo.isNull)continue; //test code uses atypical children here
     if(cinfo.typeof === 'object'){
-      DataSlinger.initializeEntryForClient(scopeItem.c[i]);
+      DataSlinger.initializeEntryForClient(cinfo.id);
     }
   }
   var wnd = core.getWindowPaneFromIndex(core.getHostPaneIndex());
@@ -692,21 +678,17 @@ function initializeRecordAggregatorApplet(core,callback){
 
 function generateRecordAggregatorHTML(core,responseCallback){
   var html = "";
-  var scopeItem = core.scopeItem;
-  //change set 271
-  //var iter = core.tracker;
+  var sidx = core.scopeItemIndex;
   var iter = core.getTracker();
   var child = null;
   var curIdString = "";
-  //change set 271
-  //for(var i=0; i<scopeItem.c.length; i++){
   var len = iter.childCount();
   for(var i=0; i<len; i++){
-    child = scopeItem.c[i];
+    var cinfo = iter.childInfo();
     curIdString = iter.getIdString();
     SharedGlobal.tic.push(curIdString);
-    if(child && typeof child.d !== 'undefined'){
-      html += DataSlinger.getDataEntryFormHTMLForAggregator(curIdString,child,{});
+    if(cinfo.exists && !cinfo.isNull){
+      html += DataSlinger.getDataEntryFormHTMLForAggregator(curIdString,cinfo.id,{});
     }
     else{
       html += "<div class=\"ag-entry\" id=\"" + curIdString + "\">" + DataSlinger.getDSErrorMsg() + "</div>";
@@ -757,35 +739,32 @@ DataSlinger.acceptNewRecordEntryValues = function(resultMap){
     return;
   }
   var core = SharedGlobal.core;
-  //change set 271
-  //var childIndex = core.scopeItem.c.length;
   var iter = core.getTracker();
   var childIndex = iter.childCount();
   var si = core.getSelectionInfo();
   if(si.rgn === 'child')childIndex = si.zoneIndex;
-  var nuItem = core.createNewVaultItem();
-  nuItem.recordScheme = resultMap['rtyp'].value;
-  nuItem.apcd = "DataSlinger0";
+  var nuId = core.createAndInsertVaultItem(si.scopeIndex,childIndex);
+  var nuItemData = core.getItemData(nuId,true);
+  nuItemData.recordScheme = resultMap['rtyp'].value;
+  core.setItemAppCode(nuId,"DataSlinger0");
   var sid = SharedGlobal.core.getTemporaryVaultUniqueId();
-  SharedGlobal.core.setAutoManagedNonSerializableField(nuItem,"storageId",sid);
-  core.addVaultItem(core.scopeItemIndex,"",nuItem,childIndex);
+  core.setAutoManagedNonSerializableField(nuItemData,"storageId",sid);
   core.promptToSave(false);
-  var cia = core.childIds[core.scopeItemIndex];
-  core.openItemFromId(cia[childIndex],"");
+  core.openItemFromId(nuId,"");
 }
 
 DataSlinger.doEditItemHandler = function(){
   var core = SharedGlobal.core;
-  var storageId = SharedGlobal.core.scopeItem.storageId;
+  var storageId = core.getItemData(sidx,true).storageId;
   var si = null;
   var childIndex = -1;
   var token = core.getPersistentDrawingInstanceToken();
   var store = DataSlinger.state[storageId][token];
   store.returnToClient = true;
   store.clientSelectionInfo = si = core.getSelectionInfo();
-  var cia = core.childIds[core.scopeItemIndex];
   if(si.rgn === 'child')childIndex = si.zoneIndex;
-  core.openItemFromId(cia[childIndex],"");
+  var cinfo = core.getChildItemInfo(si.scopeIndex,childIndex);
+  core.openItemFromId(cinfo.id,"");
   return true; 
 }
 

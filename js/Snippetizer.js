@@ -18,7 +18,6 @@ Snippetizer = {};
 Snippetizer.appId = "snippetizer_app";
 Snippetizer.tempStore = {};
 Snippetizer.tempDIStore = {};
-Snippetizer.html = "";
 
 Snippetizer.nextGranularity = function(g){
   if(g === 'sec')return 'par';
@@ -57,11 +56,12 @@ Snippetizer.getAppletWindowId = function(appInstanceId,windowId){
 Snippetizer.getStorageInfo = function(diToken){
   var s = Snippetizer;
   var info = {tempStore:null,tempDIStore:null,token:diToken};
-  var scopeItem = SharedGlobal.core.scopeItem;
-  if(typeof s.tempStore[scopeItem.appInstanceId] === 'undefined'){
-    s.tempStore[scopeItem.appInstanceId] = {};
+  var sidx = SharedGlobal.core.scopeItemIndex;
+  var appInstanceId = SharedGlobal.core.getItemAppInstanceId(sidx);
+  if(typeof s.tempStore[appInstanceId] === 'undefined'){
+    s.tempStore[appInstanceId] = {};
   }
-  info.tempStore = s.tempStore[scopeItem.appInstanceId];
+  info.tempStore = s.tempStore[appInstanceId];
   if(typeof s.tempDIStore[diToken] === 'undefined'){ //di - drawing instance
     var di = s.tempDIStore[diToken] = {};
     di.selectionGranularity = 'par';
@@ -93,41 +93,11 @@ Snippetizer.getStorageInfo = function(diToken){
 }
 
 function initializeForSnippetizerDeepDocApplet(core,callback,hostPaneIdx,args){
-  //change set 271
-/*  var scopeItem = core.scopeItem;
   var s = Snippetizer;
-  var iter = core.tracker;
-  if(typeof scopeItem.config === 'undefined')scopeItem.config = 'app-defined';
-  if(typeof scopeItem.boundLocation === 'undefined')scopeItem.boundLocation = "";
-  //change set 271
-  //var len = scopeItem.c.length;
-  //var c = null;
-  //the next line needs to be looking at a snippetizer applet map index by appInstanceIds
-  //var doc = scopeItem.c[0];
-  //change set 271
-  //var testdoc = iter.child(0);
-  //if(typeof doc === 'undefined')doc = null;
-  //if(doc === null){
-  var cinfo = iter.childInfo(0);
-  if(!cinfo.exists || cinfo.isNull){
-    doc = SharedGlobal.core['createNewVaultItem']();
-    //this call to installGuest does not respin ids, but the regeneration of scaffolding ids does happen later, fyi 
-    SharedGlobal.core['installGuest'](scopeItem,0,null,doc);
-  }
-  if(typeof scopeItem.appInstanceId !== 'undefined'){
-    s.appInstanceId = scopeItem.appInstanceId;
-  }
-  else scopeItem.appInstanceId = s.appInstanceId = SharedGlobal.core['getApplicationInstanceId'](scopeItem);
-*/
-
-  var s = Snippetizer;
-  //change set 271
-  //var iter = core.tracker;
   var iter = core.getTracker();
-  //change set 271
   var sidx = core.scopeItemIndex;
-  if(core.getItemConfig(sidx) === ""){
-    core.setItemConfig(sidx,'app-defined');
+  if(core.getItemConfiguration(sidx) === ""){
+    core.setItemConfiguration(sidx,'app-defined');
   }
   if(typeof s.appInstanceId === 'undefined' || s.appInstanceId === -1){
      s.appInstanceId = core.getItemAppInstanceId(sidx);
@@ -137,22 +107,10 @@ function initializeForSnippetizerDeepDocApplet(core,callback,hostPaneIdx,args){
   }
   var storageInfo = s.getStorageInfo(core.getPersistentDrawingInstanceToken());
   var ts = storageInfo.tempStore;
-  //change set 271
-  /*
-    The need for performant access to the loaded document text is particularly poingant for Snippetizer. It is not recommended that any applet will have direct access to a vault item object, so this is intended to be a rarely used capability. 
-  */
   var cinfo = iter.childInfo(0);
   if(!cinfo.exists || cinfo.isNull){
     //the id returned here is not reliable, but is likely to become persistent in the future. Persistent will eventually mean: valid until the reloading of the web application inside the browser. 
-    ts.deepDoc = core.createNewVaultItem();
-    //this call to installGuest does not respin ids, but the regeneration of scaffolding ids does happen later, fyi 
-    //change set 271
-    //SharedGlobal.core.installGuest(scopeItem,0,null,ts.deepDoc);
-    core.installGuest(core.scopeItemIndex,0,null,ts.deepDoc);
-    ts.deepDoc.c = [];
-  }
-  else{
-    ts.deepDoc = iter.child(0); 
+    ts.deepDocArr = [];
   }
   var di = storageInfo.tempDIStore;
   if(typeof di.foremost === 'undefined'){
@@ -164,8 +122,6 @@ function initializeForSnippetizerDeepDocApplet(core,callback,hostPaneIdx,args){
   if(typeof di.calloutGroup === 'undefined'){
     di.calloutGroup = 'default_tweaks';
   }
-  //change set 271
-  //ts.deepDoc = doc; 
   if(typeof di.olf === 'undefined'){
     di.olf = {};
   }
@@ -175,8 +131,6 @@ function initializeForSnippetizerDeepDocApplet(core,callback,hostPaneIdx,args){
   if(typeof di.olf.linesMap === 'undefined'){
     di.olf.linesMap = {};
   }
-  //change set 271
-  //var ss = s.getVaultSharedStorageForAppInstance(scopeItem.appInstanceId); //permanent storage in vault for searchability
   var ss = s.getVaultSharedStorageForAppInstance(s.appInstanceId); //permanent storage in vault for searchability
   if(typeof ss.callouts === 'undefined'){
     ss.callouts = {"default_tweaks":{"snippetData":{},"cfmt":{"snippetArr":[]}}};
@@ -187,12 +141,8 @@ function initializeForSnippetizerDeepDocApplet(core,callback,hostPaneIdx,args){
     di.orderedSDKeysArr = s.radixSortOnLocationData(di.aggregateSDMap);
   }
   di.verticalBump = 0;
-  //change set 271
   var loc = core.getItemBoundLocation(sidx);
-  //if(scopeItem.boundLocation !== ""){
   if(loc !== ""){
-    //change set 271
-    //core.requestFileContents(scopeItem.boundLocation,s.dataReceiverMethod,{ts:ts,di:di}); 
     core.requestFileContents(loc,s.dataReceiverMethod,{ts:ts,di:di}); 
     core.setupResponsiveMenuitem(hostPaneIdx,'author','select text','anyregion',null,'select-text','',s.toggleSelectTextMode);
     core.setupResponsiveMenuitem(hostPaneIdx,'author','add_snippet comment','anyregion',null,'','',s.addCommentToCurrentLocation);
@@ -247,24 +197,20 @@ function initializeForSnippetizerDeepDocApplet(core,callback,hostPaneIdx,args){
 
 function generateSnippetizerDeepDocHTML(core,responseCallback){
   var s = Snippetizer;
-  var scopeItem = core.scopeItem;
-  var scopeIndex = core.scopeItemIndex;
-  //change set 271
-  //if(scopeItem.boundLocation === ""){
-  if(core.getItemBoundLocation(scopeIndex) === ""){
+  var sidx = core.scopeItemIndex;
+  if(core.getItemBoundLocation(sidx) === ""){
     return s.getSetupHowToMsg();
   }
   var storageInfo = s.getStorageInfo(core.getPersistentDrawingInstanceToken());
   var di = storageInfo.tempDIStore;
   var ts = storageInfo.tempStore;
   var html = "<table cellspacing=\"0\" cellpadding=\"0\" border=\"0\"><tr><td bgcolor=\"#e6eaf9\" valign=\"top\"><div class=\"deep-doc-margin\" id=\"deep-doc-margin" + di.token + "\"><div id=\"bumper-div-mgn" + di.token + "\"></div><div class=\"sideIcon\" id=\"sideIconGrp" + di.token + "\"></div></div></td><td><div class=\"deep-doc\" id=\"deep-doc-page" + di.token + "\">";
-  if(ts.deepDoc.c.length < 1){
+  if(ts.deepDocArr.length < 1){
     return  "<div class=\"spacer-item\"></div><div class=\"basic-tab\"></div>[Empty document]<div class=\"spacer-item\"></div>";
   }
   html += "<div id=\"bumper-div" + di.token + "\"></div>";
-  var docLen = ts.deepDoc.c.length;
-  var docLines = ts.deepDoc.c;
-  var rda = di.rangeDescriptionArr = [{"type":"par","bgn":0,"end":docLen - 1,"data":docLines}];
+  var docLen = ts.deepDocArr.length;
+  var rda = di.rangeDescriptionArr = [{"type":"par","bgn":0,"end":docLen - 1,"data":ts.deepDocArr}];
   var rdEntry = null;
   di.metadataArrayPos = 0;
   di.curAnnotationNum = 1;
@@ -275,7 +221,7 @@ function generateSnippetizerDeepDocHTML(core,responseCallback){
     }
   }
   html += "</div></td></tr></table>";
-  html += SharedGlobal.getResourceItemsHTML(scopeItem);
+  html += SharedGlobal.getResourceItemsHTML(sidx);
   var retData = {};
   var appletValues = {};
   appletValues['isMultiLevel'] = true;
@@ -391,20 +337,20 @@ Snippetizer.generateHTMLForCalloutGroup = function(list,addCheckboxes){
 
 Snippetizer.postHTMLInstallMethod = function(info){
   var s = Snippetizer;
-  var scopeItem = SharedGlobal.core.scopeItem;
+  var sidx = SharedGlobal.core.scopeItemIndex;
+  var appInstanceId = SharedGlobal.core.getItemAppInstanceId(sidx);
   var info = s.getStorageInfo(SharedGlobal.core.getPersistentDrawingInstanceToken());
   var ts = info.tempStore;
   var di = info.tempDIStore;
-  var ss = s.getVaultSharedStorageForAppInstance(scopeItem.appInstanceId); //permanent storage in vault for searchability
+  var ss = s.getVaultSharedStorageForAppInstance(appInstanceId); //permanent storage in vault for searchability
   if(di.olf.linesMap !== 'undefined'){
-    OutlineFormatter.lineCount = ts.deepDoc.c.length; 
+    OutlineFormatter.lineCount = ts.deepDocArr.length; 
     OutlineFormatter.lineIdPrefix = "dd_";
     OutlineFormatter.initializeOutlineFormatterForClientApplet(di.olf.linesMap);
     s.applyOutlineFormat(ts);
   }
   var sarr = ss.callouts[di.calloutGroup].cfmt.snippetArr;
   if(sarr.length > 0){
-    //var sarr = di.cfmt.snippetArr;
     var snippet = null;
     var rangeInfo = null;
     var elmtArr = null;
@@ -466,7 +412,7 @@ Snippetizer.postHTMLInstallMethod = function(info){
     }
   }
   if(di.userMode === 'apply_outline'){
-    OutlineFormatter.lineCount = ts.deepDoc.c.length; 
+    OutlineFormatter.lineCount = ts.deepDocArr.length; 
     postHTMLInstallForOutlineFormatter();
   }
 }
@@ -503,21 +449,22 @@ Snippetizer.dataReceiverMethod = function(data,requestContext){
   }
   //s.rangeDescriptionArr = [{"type":"par","bgn":0,"end":arr.length - 1,"data":docLines}];
   var ts = requestContext.ts;
-  ts.deepDoc.c = docLines;
+  ts.deepDocArr = docLines;
   SharedGlobal.core.requestRedraw(false);
-  var scopeItem = requestContext.scopeItem;
-//  if(scopeItem.userMode === 'apply_outline'){
-//    var scopeItem = SharedGlobal.core.scopeItem;
+  var sidx = requestContext.scopeItemId;
+  var d = SharedGlobal.core.getItemData(sidx); //scope item holds app data specific to its vault location
+//  if(d.userMode === 'apply_outline'){
+//    var scopeItemId = SharedGlobal.core.scopeItemIndex;
 //    OutlineFormatter.initializeOutlineFormatterForClientApplet(di.olf.linesMap);
 //  }
   var di = requestContext.di;
   if(di.userMode === 'exhibition'){
     if(haveAnnotations){
-      if(typeof scopeItem.anot === 'undefined'){
+      if(typeof d.anot === 'undefined'){
         document.getElementById('load-annotations').style.display = "block";
       }
       else {
-        SharedGlobal.core.requestFileContents(scopeItem.anot.path,s.annotationsReceiverMethod,""); 
+        SharedGlobal.core.requestFileContents(d.anot.path,s.annotationsReceiverMethod,""); 
       }
     }
   }
@@ -950,8 +897,9 @@ Snippetizer.handleSelectionMouseDown = function(e){
   var storageInfo = s.getStorageInfo(SharedGlobal.core.getPersistentDrawingInstanceToken());
   var ts = storageInfo.tempStore;
   var di = storageInfo.tempDIStore;
-  var appletItem = SharedGlobal.core.scopeItem;
-  if(appletItem.boundLocation === "")return false;
+  var sidx = SharedGlobal.core.scopeItemIndex;
+  var boundLocation = SharedGlobal.core.getItemBoundLocation(sidx);
+  if(boundLocation === "")return false;
   var selectionInfo = {};
   selectionInfo.arr1 = s.selectionArrayFromSelectionString(di.foremost.location);
   selectionInfo.arr2 = s.selectionArrayFromSelectionString(di.aftmost.location);
@@ -1331,7 +1279,6 @@ Snippetizer.getSelectedSnippetizerText = function(){
 
 Snippetizer.toggleSelectTextMode = function(){
   var s = Snippetizer;
-  var scopeItem = SharedGlobal.core.scopeItem;
   var di = Snippetizer.getStorageInfo(SharedGlobal.core.getPersistentDrawingInstanceToken()).tempDIStore;
   var lst = [];
   var pos = 0;
@@ -1391,8 +1338,9 @@ Snippetizer.editFormatForSelectedLine = function(e){
   var loc = [di.foremost.location,di.aftmost.location];
   var fmtVals = Snippetizer.defaultLineFormat;
   var snippet = null;
-  var scopeItem = SharedGlobal.core.getSelectionInfo().scopeItem;
-  var ss = Snippetizer.getVaultSharedStorageForAppInstance(scopeItem.appInstanceId);
+  var sidx = SharedGlobal.core.scopeItemIndex;
+  var appInstanceId = SharedGlobal.core.getItemAppInstanceId(sidx);
+  var ss = Snippetizer.getVaultSharedStorageForAppInstance(appInstanceId);
   var sarr = ss.callouts[di.calloutGroup].cfmt.snippetArr;
   var rslt = Snippetizer.checkSnippetFormatArrayForLocation(loc,sarr);
   if(rslt.snippet === null){
@@ -1451,7 +1399,9 @@ Snippetizer.acceptCustomDlgFormatValues = function(resultMap){
   lastLineFormatUsed = fmtArr; 
   var s = Snippetizer;
   var si = SharedGlobal.core.getSelectionInfo();//specify pane index if not concerned with active pane
-  var ss = s.getVaultSharedStorageForAppInstance(si.scopeItem.appInstanceId); //permanent storage in vault for searchability
+  var sidx = SharedGlobal.core.scopeItemIndex;
+  var appInstanceId = SharedGlobal.core.getItemAppInstanceId(sidx);
+  var ss = s.getVaultSharedStorageForAppInstance(appInstanceId); //permanent storage in vault for searchability
   var di = s.getStorageInfo(SharedGlobal.core.getPersistentDrawingInstanceToken()).tempDIStore;
   var snippet = s.currentSnippet;
   var cfmt = ss.callouts[di.calloutGroup].cfmt;
@@ -1538,8 +1488,9 @@ Snippetizer.acceptLink = function(resultMap){
 
 Snippetizer.acceptSnippetDataAtLocation = function(artifactOb,save){
   var s = Snippetizer;
-  var ss = s.getVaultSharedStorageForAppInstance(SharedGlobal.core.scopeItem.appInstanceId); 
+  var appInstanceId = SharedGlobal.core.getItemAppInstanceId(SharedGlobal.core.scopeItemIndex);
   var di = s.getStorageInfo(SharedGlobal.core.getPersistentDrawingInstanceToken()).tempDIStore;
+  var ss = s.getVaultSharedStorageForAppInstance(appInstanceId); 
   var locArr =  di.featuredLocationArr;
   if(di.foremost.location !== "-1_-1_-1"){
     locArr = di.featuredLocationArr = [di.foremost.location,di.aftmost.location]
@@ -1617,7 +1568,8 @@ Snippetizer.handleTerracePaneClick = function(e){
     }
   }  
   if(index > -1){
-    var ss = Snippetizer.getVaultSharedStorageForAppInstance(SharedGlobal.core.scopeItem.appInstanceId);
+    var appInstanceId = SharedGlobal.core.getItemAppInstanceId(SharedGlobal.core.scopeItemIndex);
+    var ss = Snippetizer.getVaultSharedStorageForAppInstance(appInstanceId);
     var di = Snippetizer.getStorageInfo(SharedGlobal.core.getPersistentDrawingInstanceToken()).tempDIStore;
     var sdKey = di.orderedSDKeysArr[di.featuredSnippetIndex].join('_');
     var artifactList = ss.callouts[di.calloutGroup].snippetData[sdKey].artifacts;
@@ -1845,7 +1797,8 @@ Snippetizer.displaySnippetArtifacts = function(di){
   }
   if(locArr.length > 0){
     var key = locArr.join('_');
-    var ss = Snippetizer.getVaultSharedStorageForAppInstance(SharedGlobal.core.scopeItem.appInstanceId);
+    var appInstanceId = SharedGlobal.core.getItemAppInstanceId(SharedGlobal.core.scopeItemIndex);
+    var ss = Snippetizer.getVaultSharedStorageForAppInstance(appInstanceId);
     Snippetizer.displaySnippet(di,locArr,key);
   }
 }
@@ -1974,8 +1927,8 @@ Snippetizer.displayFloatingTerrace = function(di){
   var endSnptScrnBox = endSnptElmt.getBoundingClientRect();
   var ddPageBox = deepDocElmt.getBoundingClientRect();
   var sdKey = di.orderedSDKeysArr[di.featuredSnippetIndex].join('_');
-  var scopeItem = SharedGlobal.core.scopeItem;
-  var ss = Snippetizer.getVaultSharedStorageForAppInstance(scopeItem.appInstanceId);
+  var appInstanceId = SharedGlobal.core.getItemAppInstanceId(SharedGlobal.core.scopeItemIndex); 
+  var ss = Snippetizer.getVaultSharedStorageForAppInstance(appInstanceId);
   var sd  = ss.callouts[di.calloutGroup].snippetData;
   if(typeof sd[sdKey] === 'undefined')return;
   var artifactList = sd[sdKey].artifacts;
@@ -2115,20 +2068,16 @@ Snippetizer.enterApplyOutlineMode = function(){
   var di = storageInfo.tempDIStore;
   di.userMode = 'apply_outline';
   OutlineFormatter.setupMenuitems();
-  var scopeItem = SharedGlobal.core.scopeItem;
   OutlineFormatter.initializeOutlineFormatterForClientApplet(di.olf.linesMap);
-  OutlineFormatter.lineCount = ts.deepDoc.c.length; 
+  OutlineFormatter.lineCount = ts.deepDocArr.length; 
   OutlineFormatter.lineIdPrefix = "dd_";
   SharedGlobal.core.requestRedraw(false);
   var token = SharedGlobal.core.getPersistentDrawingInstanceToken(); 
   var wndIdx = SharedGlobal.core.getHostPaneIndex(); 
-  //document.getElementById('apply-outline-' + token).innerHTML = "apply outline &#10003"; //check mark symbol
   document.getElementById('apply-outline').innerHTML = "apply outline &#10003"; //check mark symbol
-  //SharedGlobal.core.setMenuitemVisibilityFromList(wndIdx,lst);
 }
 
 Snippetizer.exitApplyOutlineMode = function(){
-  var scopeItem = SharedGlobal.core.scopeItem;
   var ts = Snippetizer.getStorageInfo(SharedGlobal.core.getPersistentDrawingInstanceToken()).tempStore;
   Snippetizer.applyOutlineFormat(ts);
   OutlineFormatter.removeMenuitems();
@@ -2139,7 +2088,6 @@ Snippetizer.exitApplyOutlineMode = function(){
 
 Snippetizer.applyOutlineFormat = function(ts){
   var di = Snippetizer.getStorageInfo(SharedGlobal.core.getPersistentDrawingInstanceToken()).tempDIStore;
-  var scopeItem = SharedGlobal.core.scopeItem;
   var linesMap = di.olf.linesMap;
   var keyArr = Object.keys(linesMap);
   var lineId = -1;
@@ -2147,7 +2095,7 @@ Snippetizer.applyOutlineFormat = function(ts){
   var queuedInfo = null;
   var nuInfo = null;
   var curLevel = 0;
-  var data = ts.deepDoc.c;
+  var data = ts.deepDocArr;
   var fmtRules = di.olf.formatRules;
   if(typeof fmtRules === 'undefined'){
     fmtRules = di.olf.formatRules = OutlineFormatter.getDefaultOLFormattingRulesObjectsArray();
@@ -2188,9 +2136,10 @@ Snippetizer.loadAnnotations = function(){
 }
 
 Snippetizer.acceptAnnotationsPath = function(resultMap){
-  var scopeItem = SharedGlobal.core.scopeItem;
-  scopeItem.anot = {};
-  var path = scopeItem.anot.path = resultMap['pth'].value;
+  var sidx = SharedGlobal.core.scopeItemIndex;
+  var d = SharedGlobal.core.getItemData(sidx); //scope item holds app data specific to its vault location
+  d.anot = {};
+  var path = d.anot.path = resultMap['pth'].value;
   SharedGlobal.core.requestFileContents(path,Snippetizer.annotationsReceiverMethod,""); 
 }
 
@@ -2204,7 +2153,7 @@ Snippetizer.formatExternalAnnotations = function(){
   //not in use
   console.log("This code should not be hit!!!");
   return;
-  var docLines = Snippetizer.deepDoc.c;
+  var docLines = Snippetizer.deepDocArr;
   var line = "";
   var pos = 0;
   for(var i=0; i<docLines.length; i++){
@@ -2220,21 +2169,16 @@ Snippetizer.formatExternalAnnotations = function(){
 
 //////////////// micro-self-contained snippet functions ////////////////////
 
-Snippetizer.setupStateInfoForSelfContainedSnippetizerItem = function(item){
-  if(typeof item === 'undefined' || item == null){
-    return;
-  }
-  if(typeof item.d === 'undefined' || item.d == null){
-    item.d = {};
-  }
-  if(typeof item.d.callouts === 'undefined'){
-    item.d.callouts = {};
+Snippetizer.setupStateInfoForSelfContainedSnippetizerItem = function(itemId){
+  var d = SharedGlobal.core.getItemData(itemId);
+  if(typeof d.callouts === 'undefined'){
+    d.callouts = {};
   }
 }
 
-Snippetizer.generateSelfContainedSnippetizerItemHTML = function(item){
+Snippetizer.generateSelfContainedSnippetizerItemHTML = function(itemId){
   var html = "Self-contained snippetizer item coming soon";
-  //html += item.labs[0];
+  html += SharedGlobal.core.getAutoConfiguredLabel(itemId,0);
   return html;
 }
 

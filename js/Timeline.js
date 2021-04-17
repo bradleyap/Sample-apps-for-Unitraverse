@@ -153,30 +153,16 @@ function computeAndSaveInitialTimelinePixelOffset(di){
 	di.initialEventPxlOffset = firstEvtDif - droppedPxls;
 }
 
-function ingestSimpleTimelineItems(ob,di){
+function ingestSimpleTimelineItems(di){
   di.eventList = [];
   var t1 = null;
   var t2 = null;
   var details = "";
-  //change set 271
-  //if(typeof ob.c === 'undefined'){
-  //  return;
-  //}
-  //for(var i=0; i<ob.c.length; i++){
   var iter = SharedGlobal.core.getTracker();
   var len = iter.childCount();
   for(var i=0; i<len; i++){
-    //change set 271
-    //var item = ob.c[i];
-    //if(typeof item == 'undefined'){
-    //  continue;
-    //}
     var cinf = iter.childInfo();
     if(!cinf.isNull){
-      //if(typeof item.labs === 'undefined' || (item.labs.length < 2)){
-      //  continue;
-      //}
-      //if(typeof item.c === 'undefined' || (item.c.length < 2)){
       var iter2 = iter.down();
       var numFields = iter2.childCount(); 
       if(numFields < 2){
@@ -184,37 +170,22 @@ function ingestSimpleTimelineItems(ob,di){
       }
       t1 = null;
       t2 = null;
-      //change set 271
-      //var dtStringArr = item.labs[1].split(' to ');
-      //var dtStringArr = item.c[1].split(' to ');
       var dtStringArr = iter2.label(1).split(' to '); 
       t1 = extractDatetimeValuesFromString(dtStringArr[0]);
       if(dtStringArr.length > 1){
         t2 = extractDatetimeValuesFromString(dtStringArr[1]);
       } 
-      //change set 271
-      //if(item.labs.length > 2){
-      //  details = item.labs[2]; 
-      //if(item.c.length > 2){
-        //details = item.c[2]; 
       if(numFields > 2){
         details = iter2.label(2); 
       }
       var clr = "#cc33dd";
-      //change set 271
-      //if(typeof item.clr !== 'undefined'){
-      //if(typeof item.clr !== 'undefined'){
-        //clr = item.clr;
-      var idata = iter.data();
+      var idata = iter2.data(true);
       if(typeof idata.clr !== 'undefined'){
         clr = idata.clr;
       }
-      //change set 271
-      //var evt = new EventObject(item.labs[0],details,t1,t2,clr);
-      var evt = new EventObject(item.c[0],details,t1,t2,clr);
+      var evt = new EventObject(iter2.label(0),details,t1,t2,clr);
       di.eventList[i] = evt;
     }
-    //change set 271
     iter.next();
   }
 }
@@ -522,6 +493,7 @@ function EventObject(label,details,bgn,end,color){
   //this.itemRhs.style.background = color;
   var imagePath = SharedGlobal.core.getImageDirectoryPath();
   this.itemRhs.style.backgroundImage = "url('" + imagePath + "/round-terminal-rhs.png')"; 
+  //this.itemRhs.style.backgroundRepeat = 'no-repeat';
   this.itemRhs.style.position = 'absolute';
   this.itemRhs.style.zIndex = '55';
   this.itemRhs.style.display = 'block';
@@ -571,6 +543,7 @@ function EventObject(label,details,bgn,end,color){
     }
     this.item.style.background = color;
     this.item.style.backgroundImage = "url('" + imagePath + "/round-terminal-lhs.png')"; 
+    this.item.style.backgroundRepeat = 'no-repeat';
     this.itemRhs.style.background = color;
     this.itemRhs.style.backgroundImage = "url('" + imagePath + "/round-terminal-rhs.png')"; 
     this.stem.style.backgroundColor = color;
@@ -1708,9 +1681,9 @@ function setTimeFromSparseDatetime(t){
         return tout;
 }
 
-function extractDatetimeValuesFromString(dtString){ //expected format is M-dd-yyyy hh:mm:ss:S z era
+function extractDatetimeValuesFromString(dateString){ //expected format is M-dd-yyyy hh:mm:ss:S z era
 	var t = createDatetime();
-        var partArr = dtString.split(' ');
+        var partArr = dateString.split(' ');
 	var dtArr = partArr[0].split('-');
 	t.months = Number(dtArr[0]) - 1;
 	t.days = Number(dtArr[1]) - 1;
@@ -2317,10 +2290,6 @@ function initializeBasicTimeline(core,responseCallback){
   }
   var di = tempStore[token];
   var apIdx = core.getHostPaneIndex();
-  var scopeItem = core.scopeItem;
-  //change set 271 - no flag is same as one set to false
-  //scopeItem.hdTtl = false;
-  core.setItemTitleBarVisibility(core.scopeIndex,false);
 
   core.setupResponsiveMenuitem(apIdx,'author','add_event','outofbounds,navpath,container,child,resource',null,'','',addTimelineEvent);
   core.setupResponsiveMenuitem(apIdx,'author','add_timespan','outofbounds,navpath,container,child,resource',null,'','',addTimelineSpan);
@@ -2329,6 +2298,8 @@ function initializeBasicTimeline(core,responseCallback){
   core.setupResponsiveMenuitem(apIdx,'gleaner','display_labels','anyregion',function(){return !doesDisplayCodeValueEqual('labels');},'','',displayLabels);
   core.setupResponsiveMenuitem(apIdx,'gleaner','display_all info','anyregion',function(){return !doesDisplayCodeValueEqual('details');},'','',displayDetails);
   core.setupResponsiveMenuitem(apIdx,'gleaner','display_plots & bars','anyregion',function(){return !doesDisplayCodeValueEqual('hide_all');},'','',displayOnlyPlotsAndBars);
+  var wnd = core.getWindowPaneFromIndex(core.getHostPaneIndex());
+  core.setMaxWindowSize(wnd,2400,-1);
 }
 
 function doesDisplayCodeValueEqual(value){
@@ -2371,37 +2342,38 @@ function generateBasicTimelineHTML(core,responseCallback){
   var di = tempStore[SharedGlobal.core.getPersistentDrawingInstanceToken()];
   di.tlAreaHeight = contentAreaSz.height - 10; //10 = padding + sort of a magic number
   di.tlAreaWidth = di.frameRSide = contentAreaSz.width;
-  responseCallback({"appletValuesMap":{"postHTMLInstallAppletInfo":{"method":postHTMLInstallForTimelineView,"data":{}},"overflow-x":"hidden"}});
-  if(true){
-    if(typeof core.scopeItem.d !== 'undefined'){
-      if(typeof core.scopeItem.d.timeline_structure !== 'undefined'){
-        var tls = core.scopeItem.d.timeline_structure;
-        if(tls === 'group_list'){
-          //ingestTimelineComplexGroup(core.scopeItem,di);
-        }
-        if(tls === 'layered_groups'){
-          //ingestTimelineLayerGroups(core.scopeItem,di);
-        }
-        if(tls === 'event_list'){
-          //ingestTimelineEventList(core.scopeItem,di);
-        }
+  var sidx = core.scopeItemIndex;
+  var itemData = core.getItemData(sidx,true);
+  if(typeof itemData.timelineStructure !== 'undefined'){
+    if(typeof itemData.timeline_structure !== 'undefined'){
+      var tls = itemData.timeline_structure;
+      if(tls === 'group_list'){
+        //ingestTimelineComplexGroup(di);
+      }
+      if(tls === 'layered_groups'){
+        //ingestTimelineLayerGroups(di);
+      }
+      if(tls === 'event_list'){
+        //ingestTimelineEventList(di);
       }
     }
-    else{
-      //change set 271
-      //if(core.scopeItem.c !== 'undefined' && core.scopeItem.labs !== 'undefined'){
-      if(core.scopeItem.c !== 'undefined'){
-        ingestSimpleTimelineItems(core.scopeItem,di);
-      }
-    }
-    computeEarliestAndLatestEvents(di);
-    timelineInit(di);
-    prepareBasicTimelineElements(di);
   }
+  else{
+    var cc = core.getItemChildCount(sidx);
+    if(cc > 0){
+      ingestSimpleTimelineItems(di);
+    }
+  }
+  computeEarliestAndLatestEvents(di);
+  timelineInit(di);
+  prepareBasicTimelineElements(di);
   var evtFrameId = 'evtfrm' + token;
   var barFrameId = 'bfrm' + token;
   var labelFrameId = 'lfrm' + token;
   var wrapperFrameId = 'wfrm' + token;
+
+  responseCallback({"appletValuesMap":{"postHTMLInstallAppletInfo":{"method":postHTMLInstallForTimelineView,"data":{}},"overflow-x":"hidden"}});
+
   return "<div class=\"kioskTLPane\" id=\"" + wrapperFrameId + "\"><div class=\"lbframe\" id=\"" + labelFrameId + "\"></div><div id=\"" + barFrameId + "\"></div><div id=\"" + evtFrameId + "\"></div></div>";
 }
 
@@ -2570,23 +2542,17 @@ function acceptNewTimelineSpan(map){
 
 function insertTimelineItem(datetimeOb,datetimeOb2,label,details,color){
   var core = SharedGlobal.core;
-  //change set 271
-  //var scopeItem = core.scopeItem;
-  //var item = core.createNewVaultItem();
-  //item.clr = color;
-  //change set 271
-  //var tmpIdx = core.addVaultItem(core.scopeItemIndex,label,item,-1);
-  var tmpIdx = core.createVaultItem(core.scopeItemIndex,label,item,-1);
-  var data = core.getItemData(tmpIdx);
+  var nuId = core.createAndInsertVaultItem(core.scopeItemIndex,-1,label,"");
+  var data = core.getItemData(nuId,true);
   data.clr = color;
-  var dtString = datetimeOb.toString();
+  var dateString = datetimeOb.toString();
   if(datetimeOb2){
-    dtString += " to " + datetimeOb2.toString();
+    dateString += " to " + datetimeOb2.toString();
   }
-  core.insertPercept(item,0,label);
-  core.insertPercept(item,1,dtString);
+  core.insertLeafString(nuId,0,label);
+  core.insertLeafString(nuId,1,dateString);
   if(details !== ""){
-    core.insertPercept(item,2,details);
+    core.insertLeafString(nuId,2,details);
   }
 }
 
@@ -2634,7 +2600,7 @@ function loadBarsAndTagsIntoDOM(di){
 }
 
 function loadTimelineEventsIntoDOM(di){
-  var iter = SharedGlobal.core.tracker;
+  var iter = SharedGlobal.core.getTracker();
   var eventList = di.eventList;
   StyleWorkbench.resetIndexForWhiteBackgroundColors(di.token);
   for(var i=0; i<eventList.length; i++){

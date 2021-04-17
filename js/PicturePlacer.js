@@ -20,16 +20,19 @@ var PicturePlacer = {};
 /////////////////  PicturePlacer  ////////////////////////
 
 function initializePicturePlacer(core,callback,hostPaneIdx,args){
-  if(typeof core.scopeItem.d === 'undefined'){
-    core.scopeItem.d = {location:""};
+  var appData = core.getItemData(core.scopeItemIndex,true);
+  if(typeof appData.location !== 'string'){
+    appData.location = ""; 
   }
   core.setupResponsiveMenuitem(hostPaneIdx,'author','add_picture','anyregion',null,'','',PicturePlacer.doAddPicture);
 }
 
 function generatePicturePlacerHTML(core,callback){
-  var loc = core.scopeItem.d.location;
+  var loc = core.getItemDataAttribute(core.scopeItemIndex,'location');
+  if(typeof loc !== 'string'){
+    loc = "";
+  }
   if(loc.length > 0){
-    console.log('FINAL SRC STRING: ' + loc);
     return '<img src="' + loc + '"/>';
   }
   return '<div class="basic-child-item">[add a picture here]</div>';
@@ -64,7 +67,7 @@ PicturePlacer.acceptPictureLocation = function(info){
 }
 
 PicturePlacer.acceptReflectedImageLocation = function(loc){
-  SharedGlobal.core.scopeItem.d.location = loc;
+  SharedGlobal.core.setItemDataAttribute(SharedGlobal.core.scopeItemIndex,'locaction',loc); 
   SharedGlobal.core.requestRedraw(false);
 }
 

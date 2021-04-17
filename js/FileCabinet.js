@@ -172,6 +172,9 @@ FileCabinet.dataReceiverMethod = function(data,requestTag){
   var nixed = 0;
   var itemData = core.getItemData(sidx);
   var ri = FileCabinet.rootInfoMap[itemData.riKey];
+  /*
+    This ugliness is helping us to use a hack that provides a temporary vault item so the FS directory items are not stored permantently in teh vault. As mentioned above, the root item, (only item not 'spawned') uses a temporary node below it. The platform can replace that item with the stub we provided, but as of yet we can't populate a child array with items for this kind of automatic removal
+  */
   if(typeof itemData.spawned === 'undefined'){
     var cinfo = core.getItemChildInfo(sidx,0);
     sidx = cinfo.id;
@@ -184,7 +187,7 @@ FileCabinet.dataReceiverMethod = function(data,requestTag){
       if(dirList[i] === "My Videos"){nixed++; continue;}
       if(dirList[i] === "My Pictures"){nixed++; continue;}
     }
-    var nuId = core.createAndInsertVaultItem(sidx,-1,""); 
+    var nuId = core.createAndInsertVaultItem(sidx,-1); 
     var appCode = core.getItemAppCode(core.scopeItemIndex);
     if(appCode !== ""){
       core.setItemAppCode(nuId,appCode);
@@ -219,3 +222,4 @@ FileCabinet.dataReceiverMethod = function(data,requestTag){
   }
   core.requestRedraw(false);
 }
+

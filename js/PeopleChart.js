@@ -19,13 +19,12 @@ PeopleChart.orientation = 'vrt';
 PeopleChart.cfg = 'show_children';
 PeopleChart.tempStore = {};
 
-PeopleChart.getAppState = function(scopeItem){
+PeopleChart.getAppState = function(scopeId){
+  var core = SharedGlobal.core;
   var wnd = SharedGlobal.core.getWindowPaneFromIndex(SharedGlobal.core.getHostPaneIndex());
-  var awid = SharedGlobal.core.scopeItem.appInstanceId + '_' + wnd.paneId;
+  var appInstanceId = core.getItemAppInstanceId(scopeId);
+  var awid = appInstanceId + '_' + wnd.paneId;
   if(typeof PeopleChart.tempStore[awid] === 'undefined'){
-    if(typeof scopeItem === 'undefined'){
-      scopeItem = SharedGlobal.core.scopeItem;
-    }
     ts = PeopleChart.tempStore[awid] = {};
     ts.awid = awid;
   }
@@ -34,12 +33,10 @@ PeopleChart.getAppState = function(scopeItem){
 
 function initializeForPeopleChart(core,responseCallback){
   var apIdx = core.getHostPaneIndex();
-  if(typeof core.scopeItem.d === 'undefined'){
-    core.scopeItem.d = {};
-  }
-  var props = core.scopeItem.d;
-  if(typeof props.intent === 'undefined'){
-    props.intent = 'geneology';
+  var sidx = core.scopeItemIndex;
+  var appData = core.getItemData(sidx,true);
+  if(typeof appData.intent === 'undefined'){
+    appData.intent = 'geneology';
   }
   core.setupResponsiveMenuitem(apIdx,'author','add_coworker','outofbounds,navpath,container,child,resource','','','',function(e){PeopleChart.doAddPerson('coworker');});
   core.setupResponsiveMenuitem(apIdx,'author','add_direct report','outofbounds,navpath,container,child,resource','','','',function(e){PeopleChart.doAddPerson('direct report');});
@@ -51,21 +48,22 @@ function initializeForPeopleChart(core,responseCallback){
   core.setupResponsiveMenuitem(apIdx,'author','edit','child','','','',PeopleChart.handleEditPeopleChart);
   core.setupResponsiveMenuitem(apIdx,'author','remove','child','','','',function(e){core.removeItem(e);});
 
-  PeopleChart.updateMenuitemsForNewType(props.intent);
+  PeopleChart.updateMenuitemsForNewType(appData.intent);
 
   var wnd = core.getWindowPaneFromIndex(core.getHostPaneIndex());
   core.setMaxWindowSize(wnd,2400,-1);
 }
 
 function generatePeopleChartHTML(core,responseCallback){
-  var iter = core['tracker'];
+  var iter = core.getTracker();
+  var sidx = core.scopeItemIndex;
   iter.setRecursionDepthLimit(150);
   var as = PeopleChart.getAppState();
   as.inset = 10;
   as.minSpacing = 8;
   as.flowlineWd = 20;
   as.treeDepth = 0;
-  as.bundleMap = {"":{domId:"",node:iter.scopeItem,pr:""}};
+  as.bundleMap = {"":{domId:"",nodeId:sidx,pr:""}};
   as.maxSzChildArr = 0;
   as.centeringMgn = {left:0,right:0,top:0,bottom:0};
   as.devmode = true; 
@@ -75,7 +73,8 @@ function generatePeopleChartHTML(core,responseCallback){
   }
   */
   var html = '';
-  if(typeof SharedGlobal.core.scopeItem.c !== 'undefined'){
+  var cic = core.getItemChildCount(sidx);
+  if(cic > 0){
     html += '<div id="expandingBkgd">';
     /*if(as.devmode){
       html += '<div id="contentRgn1"></div>';
@@ -90,14 +89,7 @@ function generatePeopleChartHTML(core,responseCallback){
   if(html === ''){
     html += '<div class="basic-child-item">[empty]</div>';
   }
-  var retData = {};
-  var appletValues = {};
-  appletValues['isMultiLevel'] = true;
-  appletValues['explicitChildCount'] = SharedGlobal.tic.getNonResIdCount();
-  appletValues['explicitResourceCount'] = 0;
-  appletValues['postHTMLInstallAppletInfo'] = {"method":PeopleChart.postHTMLInstall,"data":{}};
-  retData['appletValuesMap'] = appletValues;
-  responseCallback(retData);
+  responseCallback({appletValuesMap:{isMultiLevel:true,explicitChildCount:SharedGlobal.tic.getNonResIdCount(),explicitResourceCount:0,postHTMLInstallAppletInfo:{"method":PeopleChart.postHTMLInstall,"data":{}}}});
   return html;
 }
 
@@ -123,28 +115,25 @@ PeopleChart.getPrelimHTML = function(core,as,iter,pr){ //pr = path route, dot (.
     html += '<svg xmlns="http://www.w3.org/2000/svg" class="flowline" id="fl-' + pr + '"><path class="fl-path" stroke="#7669a6" fill="none" stroke-width="2"  d="M 7, 7 v 3"></path></svg>';
   }
   for(var i=0; i<len; i++){
-    var n = iter.child();
-    if(n){
+    var cinfo = iter.childInfo();
+    if(cinfo.exists && !cinfo.isNull){
       curIdString = iter.getIdString();
       SharedGlobal.tic.push(curIdString); 
       var childPr = pr + sep + Number(i).toString();
       var bundleId = childPr;
       if(typeof as.bundleMap[bundleId] === 'undefined'){
-        as.bundleMap[bundleId] = {domId:curIdString,node:n,pr:childPr};
+        as.bundleMap[bundleId] = {domId:curIdString,nodeId:cinfo.id,pr:childPr};
       }
-      var subj = n.s;
-      if(typeof n.s === 'undefined'){
-        subj = 'unnamed';
-      }
-      if(typeof n.d === 'undefined'){
-        continue;
-      }
-      if(typeof n.d.isSpouse === 'string'){
-        
+      var subj = core.getItemSubject(cinfo.id);
+      if(subj === ""){
+        subj = 'unamed';
+      }      
+      var d = core.getItemData(cinfo.id,true);
+      if(typeof d.isSpouse !== 'undefined' && d.isSouse){
+
       }
       html += '<div class="personInfo" id="' + curIdString + '">' + subj + '</div> ';
       html += PeopleChart.getPrelimHTML(core,as,iter.down(),childPr);
-      //SharedGlobal.tic.push(curIdString); 
     }
     iter.next();
   }
@@ -185,7 +174,9 @@ PeopleChart.postHTMLInstall = function(){
   var topMgn = (sz.height - contentSz.h) / 2;
   if(leftMgn < 20)leftMgn = 20;
   if(topMgn < 20)topMgn = 20;
-  bgElmt.style.height = (topMgn * 2) + contentSz.h + 'px'; //sz.height + 'px';
+  if(bgElmt){
+    bgElmt.style.height = (topMgn * 2) + contentSz.h + 'px'; //sz.height + 'px';
+  }
   PeopleChart.setOrigins('',as,{left:leftMgn,top:topMgn});
   //test code:
 /*  var telmt = document.getElementById('rgn1');
@@ -440,27 +431,20 @@ PeopleChart.doAddPerson = function(relationship){
 }
 
 PeopleChart.acceptPersonInfo = function(info){
-  var as = PeopleChart.getAppState(SharedGlobal.core.scopeItem);
+  var as = PeopleChart.getAppState(SharedGlobal.core.scopeItemIndex);
   var core = SharedGlobal.core;
   var si = core.getSelectionInfo();
   var ci = -1;
   if(si.rgn === 'child'){
     ci = si.zoneIndex;  
   }
-  var nuItem = core.createNewVaultItem();
-  nuItem.s = info.nam.value;
-  nuItem.d = {dob:info.bdt.value,sex:info.sex.value,dod:info.ddt.value,details:info.det.value};
-  if(as.relationship === 'spouse'){
-    nuItem.d.isSpouse = true;
-  }
-  var parentId = si.scopeIndex;
   var parentId = -1;
   var childIdx = -1;
-  var childIds = SharedGlobal.core.getChildIds();
   if(si.pane.tabIdsPos > -1 && ci > -1){
     var encodedIdArr = si.pane.tabIdsArr[si.pane.tabIdsPos].split('_');
     if(as.addRequest === 'child' || as.addRequest === 'spouse' || as.addRequest === 'direct report'){
-      parentId = childIds[encodedIdArr[1]][encodedIdArr[2]];
+      var cinfo = core.getItemChildInfo(encodedIdArr[1],encodedIdArr[2]);
+      parentId = cinfo.id;
     }
     if(as.addRequest === 'sibling' || as.addRequest === 'coworker'){
       parentId = encodedIdArr[1];
@@ -470,7 +454,12 @@ PeopleChart.acceptPersonInfo = function(info){
   else{
     parentId = core.scopeItemIndex;
   }
-  core.addVaultItem(parentId,'',nuItem,childIdx);
+  var nuId = core.createAndInsertVaultItem(parentId,childIdx);
+  core.setItemSubject(nuId,info.nam.value);
+  core.setItemDataAttribute('dob',info.bdt.value);  
+  core.setItemDataAttribute('sex',info.sex.value);
+  core.setItemDataAttribute('dod',info.ddt.value);
+  core.setItemDataAttribute('details',info.det.value);
   core.requestRedraw(true);
 }
 
@@ -509,7 +498,9 @@ PeopleChart.acceptCustomDlgPersonValues = function(info){
 
 PeopleChart.doSpecifyChartType = function(e){
   var coi = 0;
-  if(SharedGlobal.core.scopeItem.d.intent === 'org chart'){
+  var sidx = SharedGlobal.core.scopeItemIndex;
+  var appData = SharedGlobal.core.getItemData(sidx);
+  if(appData.intent === 'org chart'){
     coi = 1;
   }
   var customDlgInfo = {"fields":[
@@ -517,15 +508,15 @@ PeopleChart.doSpecifyChartType = function(e){
     {type:"normal_text",text:"Select type"},
     {type:"radio",options:['geneology','org chart'],curOptionIdx:coi,key:'ct'}
   ]};
-  var as = PeopleChart.getAppState(SharedGlobal.core.scopeItem);
+  var as = PeopleChart.getAppState(SharedGlobal.core.scopeItemIndex);
   SharedGlobal.core.displayCustomPopup(customDlgInfo,PeopleChart.acceptChartTypeUpdate);
 }  
 
 PeopleChart.acceptChartTypeUpdate = function(info){
   var type = info['ct'].value;
-  var props = SharedGlobal.core.scopeItem.d;
-  if(props.intent !== type){
-    props.intent = type;
+  var itemData = SharedGlobal.core.getItemData(SharedGlobal.core.scopeItemIndex,true);
+  if(itemData.intent !== type){
+    itemData.intent = type;
     PeopleChart.updateMenuitemsForNewType(type);
     SharedGlobal.core.promptToSave();
   }
